@@ -1,24 +1,27 @@
-# AIML Stats Portal
+# Result Analysis Portal
 
-i want to build an result analysis for AIML department number oos pass and number of absent i want to build like this give an simplfied portal at front it should generate exat like features of the spreadsheet it should be great too interact with user and great to perfeormance
+Upload a mark sheet Excel and get a full result analysis report matching the college internal assessment format.
 
-This project was built with [Lovable](https://lovable.dev).
+## Features
 
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/685c7be4-724f-4b70-ba32-61fb8122b719).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+- Upload `.xlsx` mark sheets (MARK sheet format)
+- Automatic category breakdown (Counselling / Management × Hosteller / Day Scholar × Boys / Girls)
+- Subject-wise pass percentage, toppers, arrear groups
+- Export analysis as Excel in the exact FRONT + MARK layout used by the department
+- Clean, minimal interface for print and review
 
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+```sh
+npm install
+npm run dev
+```
+
+Open http://localhost:3000
+
+## Build
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+npm run build
+npm run preview
 ```
