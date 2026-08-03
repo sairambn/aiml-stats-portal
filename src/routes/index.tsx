@@ -29,7 +29,7 @@ export const Route = createFileRoute("/")({
       },
     ],
   }),
-  component: Portal;
+  component: Portal,
 });
 
 type TabKey = "overview" | "particulars" | "subjects" | "students" | "toppers";
