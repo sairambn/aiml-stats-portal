@@ -222,7 +222,7 @@ export function Portal() {
                 {subjects.map((s) => (
                   <li key={s.code} className="rounded-md border border-border/70 p-2 text-xs">
                     <span className="font-mono font-semibold text-accent">{s.code}</span>
-                    <p className="mt-0.5 font-medium">{s.name}</p>
+                    <p className="mt-0.5 font-medium">{s.subject.name}</p>
                   </li>
                 ))}
               </ul>
@@ -494,7 +494,15 @@ export function Portal() {
         </main>
 
         <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
-          Prepared by · HOD · Vice Principal · Principal
+          Designed and crafted by{" "}
+          <a
+            href="https://bnsairam.vercel.app/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent hover:underline"
+          >
+            Sairam BN
+          </a>
         </footer>
       </div>
     </div>
