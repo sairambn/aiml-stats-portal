@@ -1,10 +1,25 @@
+<div align="center">
+
 # Result Analysis Portal
 
 **Exam-cell ready** internal assessment result analysis.
 
 Upload a section mark sheet → view diagrams and tables → download a professional **FRONT + MARK** Excel report.
 
+[![Live](https://img.shields.io/badge/Live-aiml--stats--portal.vercel.app-black?style=for-the-badge&logo=vercel)](https://aiml-stats-portal.vercel.app)
+[![React 19](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](./LICENSE)
+
 **Live:** [aiml-stats-portal.vercel.app](https://aiml-stats-portal.vercel.app)
+
+</div>
+
+---
+
+## Privacy first
+
+No student data is stored on the server. Everything runs in the browser session. Refresh clears the session.
 
 ---
 
@@ -16,8 +31,6 @@ Upload a section mark sheet → view diagrams and tables → download a professi
 4. Optionally **Merge name list** (Reg.No + Name) for official spellings.
 5. Adjust pass mark in the sidebar if needed (default **50**).
 6. **Export analysis** → exam-cell Excel with borders, AB (yellow), fails (red).
-
-No student data is stored on the server. Refresh clears the session.
 
 ---
 
@@ -150,4 +163,4 @@ src/
 
 [MIT](./LICENSE) — free for academic and exam-cell use.
 
-Built by [@sairambn](https://github.com/sairambn)
+Built by [@sairambn](https://github.com/sairambn) · **SR**
