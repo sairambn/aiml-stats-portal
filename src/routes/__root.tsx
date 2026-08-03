@@ -7,7 +7,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 
@@ -73,12 +73,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Result Analysis Portal" },
-      { name: "description", content: "Internal assessment result analysis." },
-      { property: "og:title", content: "Result Analysis Portal" },
-      { property: "og:description", content: "Pass, fail, absentee and subject-wise result analysis." },
+      { title: "Result Analysis Portal · Exam Cell" },
+      {
+        name: "description",
+        content:
+          "Professional internal assessment result analysis for exam cell — diagrams, subject-wise performance, toppers and arrear groups.",
+      },
+      { property: "og:title", content: "Result Analysis Portal · Exam Cell" },
+      {
+        property: "og:description",
+        content: "Pass, fail, absentee and subject-wise result analysis.",
+      },
       { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:card", content: "summary" },
+      { name: "theme-color", content: "#0f172a" },
     ],
     links: [
       {
@@ -86,12 +94,15 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: appCss,
       },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
-      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "preconnect",
+        href: "https://fonts.gstatic.com",
+        crossOrigin: "anonymous",
+      },
       {
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap",
       },
-      { rel: "icon", href: "/favicon.ico", type: "image/x-icon" },
     ],
   }),
   shellComponent: RootShell,
