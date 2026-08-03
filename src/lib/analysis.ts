@@ -80,7 +80,7 @@ export function computeStudentResults(
 ): StudentResult[] {
   const rows = students.map((student) => {
     const nums = student.marks.map(numeric);
-    const total = nums.reduce((a, b) => a + (b ?? 0), 0);
+    const total = nums.reduce<number>((a, b) => a + (b ?? 0), 0);
     const absents = student.marks.filter(isAbsent).length;
     const arrears =
       student.marks.filter((m) => isAbsent(m) || (numeric(m) ?? 0) < passMark).length;
