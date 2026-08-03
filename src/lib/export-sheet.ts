@@ -1,9 +1,5 @@
 import * as XLSX from "xlsx";
-import {
-  fmt,
-  type Analysis,
-  type Subject,
-} from "@/lib/analysis";
+import { fmt, type Analysis, type Subject } from "@/lib/analysis";
 
 export type ExportMeta = {
   institution: string;
@@ -27,10 +23,6 @@ export function exportAnalysisSheet(
   const hostM = (cat["M-H-B"] ?? 0) + (cat["M-H-G"] ?? 0);
   const dayM = (cat["M-DS-B"] ?? 0) + (cat["M-DS-G"] ?? 0);
 
-  // Column order matching the department sheet:
-  // A S.No | B PARTICULARS | C-F empty | G TOTAL |
-  // H C-H-B | I C-H-G | J C-DS-B | K C-DS-G |
-  // L M-H-B | M M-H-G | N M-DS-B | O M-DS-G
   const catCols = (p: (typeof a.particulars)[0]) => [
     p.byCategory["C-H-B"],
     p.byCategory["C-H-G"],
@@ -70,6 +62,7 @@ export function exportAnalysisSheet(
       "",
       "",
       "",
+      "",
       "TOTAL",
       "COUNSELLING",
       "",
@@ -81,6 +74,7 @@ export function exportAnalysisSheet(
       "",
     ],
     [
+      "",
       "",
       "",
       "",
@@ -105,6 +99,7 @@ export function exportAnalysisSheet(
       "",
       "",
       "",
+      "",
       "BOYS",
       "GIRLS",
       "BOYS",
@@ -116,7 +111,8 @@ export function exportAnalysisSheet(
     ],
     ...a.particulars.map((p, i) => [
       i + 1,
-      p.label.toUpperCase(),
+      p.label,
+      "",
       "",
       "",
       "",
@@ -127,6 +123,7 @@ export function exportAnalysisSheet(
     [
       a.particulars.length + 1,
       "PASS PERCENTAGE",
+      "",
       "",
       "",
       "",
@@ -153,7 +150,13 @@ export function exportAnalysisSheet(
     ],
     ...a.toppers.slice(0, 3).map((r, i) => {
       const rankLabel =
-        r.rank === 1 ? "I" : r.rank === 2 ? "II" : r.rank === 3 ? "III" : String(r.rank);
+        r.rank === 1
+          ? "I"
+          : r.rank === 2
+            ? "II"
+            : r.rank === 3
+              ? "III"
+              : String(r.rank);
       return [
         "",
         i + 1,
@@ -203,36 +206,25 @@ export function exportAnalysisSheet(
       s.absent,
       s.passed,
       s.failed,
-      Number(fmt(s.passPercent, 0)),
+      Math.round(s.passPercent),
     ]),
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    [],
-    ["", "PREPARED BY", "", "", "HOD", "", "", "", "", "VICE PRINCIPAL", "", "", "", "PRINCIPAL"],
+    ...Array.from({ length: 20 }, () => [] as (string | number)[]),
+    [
+      "",
+      "PREPARED BY",
+      "",
+      "",
+      "HOD",
+      "",
+      "",
+      "",
+      "",
+      "VICE PRINCIPAL",
+      "",
+      "",
+      "",
+      "PRINCIPAL",
+    ],
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(front), "FRONT");
 
@@ -377,8 +369,7 @@ export function exportAnalysisSheet(
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(markSheet), "MARK");
 
-  XLSX.writeFile(
-    wb,
-    `Result_Analysis_${meta.batch}_${meta.section}.xlsx`,
-  );
+  const safeBatch = (meta.batch || "batch").replace(/[^\w-]+/g, "_");
+  const safeSection = (meta.section || "sec").replace(/[^\w-]+/g, "_");
+  XLSX.writeFile(wb, `Result_Analysis_${safeBatch}_${safeSection}.xlsx`);
 }
