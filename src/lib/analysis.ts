@@ -3,9 +3,9 @@ export type Mark = number | "AB" | null;
 export type Student = {
   reg: string;
   name: string;
-  gender: string; // B | G
-  quota: string; // C (counselling) | M (management)
-  stay: string; // H (hosteller) | DS (day scholar)
+  gender: string;
+  quota: string;
+  stay: string;
   marks: Mark[];
 };
 
@@ -68,7 +68,7 @@ export const CATEGORY_KEYS: CategoryKey[] = [
   "M-DS-G",
 ];
 
-const emptyCounts = () =>
+const emptyCounts = (): Record<CategoryKey, number> =>
   CATEGORY_KEYS.reduce(
     (acc, k) => ({ ...acc, [k]: 0 }),
     {} as Record<CategoryKey, number>,
@@ -82,8 +82,9 @@ export function computeStudentResults(
     const nums = student.marks.map(numeric);
     const total = nums.reduce<number>((a, b) => a + (b ?? 0), 0);
     const absents = student.marks.filter(isAbsent).length;
-    const arrears =
-      student.marks.filter((m) => isAbsent(m) || (numeric(m) ?? 0) < passMark).length;
+    const arrears = student.marks.filter(
+      (m) => isAbsent(m) || (numeric(m) ?? 0) < passMark,
+    ).length;
     const count = student.marks.length || 1;
     return {
       student,
@@ -100,8 +101,9 @@ export function computeStudentResults(
   let lastTotal: number | null = null;
   let lastRank = 0;
   sorted.forEach((r, i) => {
-    if (r.total === lastTotal) r.rank = lastRank;
-    else {
+    if (r.total === lastTotal) {
+      r.rank = lastRank;
+    } else {
       r.rank = i + 1;
       lastRank = r.rank;
       lastTotal = r.total;
@@ -120,7 +122,7 @@ export function computeSubjectStats(
     const absent = marks.filter(isAbsent).length;
     const present = marks.map(numeric).filter((n): n is number => n !== null);
     const passed = present.filter((n) => n >= passMark).length;
-    const failed = present.length - passed + absent;
+    const failed = present.length - passed;
     const appeared = present.length;
     return {
       subject,
@@ -137,7 +139,10 @@ export function computeSubjectStats(
 }
 
 export function computeParticulars(results: StudentResult[]): ParticularRow[] {
-  const build = (label: string, predicate: (r: StudentResult) => boolean): ParticularRow => {
+  const build = (
+    label: string,
+    predicate: (r: StudentResult) => boolean,
+  ): ParticularRow => {
     const byCategory = emptyCounts();
     let total = 0;
     for (const r of results) {
@@ -149,13 +154,19 @@ export function computeParticulars(results: StudentResult[]): ParticularRow[] {
   };
 
   return [
-    build("Total no of students", () => true),
-    build("No of students appeared", (r) => r.absents < r.student.marks.length),
-    build("No of students passed in all subjects", (r) => r.arrears === 0),
-    build("No of students failed", (r) => r.arrears > 0),
-    build("No of students failed in one subject", (r) => r.arrears === 1),
-    build("No of students failed in two subjects", (r) => r.arrears === 2),
-    build("No of students failed in 3 & above subjects", (r) => r.arrears >= 3),
+    build("TOTAL NO OF STUDENTS", () => true),
+    build(
+      "NO OF STUDENTS APPEARED",
+      (r) => r.absents < r.student.marks.length,
+    ),
+    build("NO OF STUDENTS PASSED IN ALL SUBJECTS", (r) => r.arrears === 0),
+    build("NO OF STUDENTS FAILED", (r) => r.arrears > 0),
+    build("NO OF STUDENTS FAILED IN ONE SUBJECT", (r) => r.arrears === 1),
+    build("NO OF STUDENTS FAILED IN TWO SUBJECTS", (r) => r.arrears === 2),
+    build(
+      "NO OF STUDENTS FAILED IN 3 & ABOVE SUBJECT",
+      (r) => r.arrears >= 3,
+    ),
   ];
 }
 
@@ -183,7 +194,9 @@ export function analyse(
   const results = computeStudentResults(students, passMark);
   const subjectStats = computeSubjectStats(students, subjects, passMark);
   const particulars = computeParticulars(results);
-  const appeared = results.filter((r) => r.absents < r.student.marks.length).length;
+  const appeared = results.filter(
+    (r) => r.absents < r.student.marks.length,
+  ).length;
   const passedAll = results.filter((r) => r.arrears === 0).length;
   const categoryCounts = emptyCounts();
   for (const r of results) categoryCounts[categoryKey(r.student)] += 1;
@@ -202,7 +215,12 @@ export function analyse(
     classAverage: results.length
       ? results.reduce((a, r) => a + r.percent, 0) / results.length
       : 0,
-    toppers: [...results].sort((a, b) => a.rank - b.rank || a.student.name.localeCompare(b.student.name)).slice(0, 5),
+    toppers: [...results]
+      .sort(
+        (a, b) =>
+          a.rank - b.rank || a.student.name.localeCompare(b.student.name),
+      )
+      .slice(0, 5),
     categoryCounts,
   };
 }
