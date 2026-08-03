@@ -21,11 +21,26 @@ export function exportAnalysisSheet(
   meta: ExportMeta,
 ) {
   const wb = XLSX.utils.book_new();
-  const catCounts = a.categoryCounts;
-  const hostC = (catCounts["C-H-B"] ?? 0) + (catCounts["C-H-G"] ?? 0);
-  const dayC = (catCounts["C-DS-B"] ?? 0) + (catCounts["C-DS-G"] ?? 0);
-  const hostM = (catCounts["M-H-B"] ?? 0) + (catCounts["M-H-G"] ?? 0);
-  const dayM = (catCounts["M-DS-B"] ?? 0) + (catCounts["M-DS-G"] ?? 0);
+  const cat = a.categoryCounts;
+  const hostC = (cat["C-H-B"] ?? 0) + (cat["C-H-G"] ?? 0);
+  const dayC = (cat["C-DS-B"] ?? 0) + (cat["C-DS-G"] ?? 0);
+  const hostM = (cat["M-H-B"] ?? 0) + (cat["M-H-G"] ?? 0);
+  const dayM = (cat["M-DS-B"] ?? 0) + (cat["M-DS-G"] ?? 0);
+
+  // Column order matching the department sheet:
+  // A S.No | B PARTICULARS | C-F empty | G TOTAL |
+  // H C-H-B | I C-H-G | J C-DS-B | K C-DS-G |
+  // L M-H-B | M M-H-G | N M-DS-B | O M-DS-G
+  const catCols = (p: (typeof a.particulars)[0]) => [
+    p.byCategory["C-H-B"],
+    p.byCategory["C-H-G"],
+    p.byCategory["C-DS-B"],
+    p.byCategory["C-DS-G"],
+    p.byCategory["M-H-B"],
+    p.byCategory["M-H-G"],
+    p.byCategory["M-DS-B"],
+    p.byCategory["M-DS-G"],
+  ];
 
   const front: (string | number)[][] = [
     [meta.institution],
@@ -82,7 +97,23 @@ export function exportAnalysisSheet(
       `DAY SCHOLAR(${dayM})`,
       "",
     ],
-    ["", "", "", "", "", "", "", "BOYS", "GIRLS", "BOYS", "GIRLS", "BOYS", "GIRLS", "BOYS", "GIRLS"],
+    [
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "",
+      "BOYS",
+      "GIRLS",
+      "BOYS",
+      "GIRLS",
+      "BOYS",
+      "GIRLS",
+      "BOYS",
+      "GIRLS",
+    ],
     ...a.particulars.map((p, i) => [
       i + 1,
       p.label.toUpperCase(),
@@ -91,14 +122,7 @@ export function exportAnalysisSheet(
       "",
       "",
       p.total,
-      p.byCategory["C-H-B"],
-      p.byCategory["C-H-G"],
-      p.byCategory["C-DS-B"],
-      p.byCategory["C-DS-G"],
-      p.byCategory["M-H-B"],
-      p.byCategory["M-H-G"],
-      p.byCategory["M-DS-B"],
-      p.byCategory["M-DS-G"],
+      ...catCols(p),
     ]),
     [
       a.particulars.length + 1,
@@ -111,23 +135,42 @@ export function exportAnalysisSheet(
     ],
     [],
     ["TOPPER LIST"],
-    ["", "S.NO", "REG.NO", "PHOTO", "STUDENTS NAME", "", "", "", "", "TOTAL", "", "PASS %", "", "RANK"],
-    ...a.toppers.slice(0, 3).map((r, i) => [
+    [
       "",
-      i + 1,
-      r.student.reg,
-      "",
-      r.student.name,
-      "",
+      "S.NO",
+      "REG.NO",
+      "PHOTO",
+      "STUDENTS NAME",
       "",
       "",
       "",
-      r.total,
       "",
-      Number(fmt(r.percent, 2)),
+      "TOTAL",
       "",
-      i === 0 ? "I" : i === 1 ? "II" : "III",
-    ]),
+      "PASS %",
+      "",
+      "RANK",
+    ],
+    ...a.toppers.slice(0, 3).map((r, i) => {
+      const rankLabel =
+        r.rank === 1 ? "I" : r.rank === 2 ? "II" : r.rank === 3 ? "III" : String(r.rank);
+      return [
+        "",
+        i + 1,
+        r.student.reg,
+        "",
+        r.student.name,
+        "",
+        "",
+        "",
+        "",
+        r.total,
+        "",
+        Number(fmt(r.percent, 2)),
+        "",
+        rankLabel,
+      ];
+    }),
     [],
     ["SUBJECT WISE PERFORMANCE"],
     [
@@ -156,12 +199,37 @@ export function exportAnalysisSheet(
       "",
       "",
       "",
-      s.appeared,
+      s.appeared + s.absent,
       s.absent,
       s.passed,
       s.failed,
-      Number(fmt(s.passPercent, 2)),
+      Number(fmt(s.passPercent, 0)),
     ]),
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
     [],
     [],
     ["", "PREPARED BY", "", "", "HOD", "", "", "", "", "VICE PRINCIPAL", "", "", "", "PRINCIPAL"],
@@ -201,6 +269,11 @@ export function exportAnalysisSheet(
     x.student.reg.localeCompare(y.student.reg),
   );
 
+  const allClear = sorted.filter((r) => r.arrears === 0);
+  const oneArrear = sorted.filter((r) => r.arrears === 1);
+  const twoArrear = sorted.filter((r) => r.arrears === 2);
+  const threePlus = sorted.filter((r) => r.arrears >= 3);
+
   const markSheet: (string | number)[][] = [
     [meta.institution],
     [meta.department],
@@ -225,7 +298,6 @@ export function exportAnalysisSheet(
     [],
     markHeader,
     ...sorted.map((r, i) => rowFor(r, i)),
-    [],
     [
       "Total No. of Students",
       "",
@@ -292,18 +364,19 @@ export function exportAnalysisSheet(
     ["ASSESSMENT RESULT ANALYSIS"],
     ["ALL CLEAR STUDENTS"],
     markHeader,
-    ...sorted.filter((r) => r.arrears === 0).map((r, i) => rowFor(r, i)),
+    ...allClear.map((r, i) => rowFor(r, i)),
     ["ONE SUBJECTS ARREAR STUDENTS"],
     markHeader,
-    ...sorted.filter((r) => r.arrears === 1).map((r, i) => rowFor(r, i)),
+    ...oneArrear.map((r, i) => rowFor(r, i)),
     ["TWO SUBJECTS ARREAR STUDENTS"],
     markHeader,
-    ...sorted.filter((r) => r.arrears === 2).map((r, i) => rowFor(r, i)),
+    ...twoArrear.map((r, i) => rowFor(r, i)),
     ["THREE & ABOVE SUBJECTS ARREAR STUDENTS"],
     markHeader,
-    ...sorted.filter((r) => r.arrears >= 3).map((r, i) => rowFor(r, i)),
+    ...threePlus.map((r, i) => rowFor(r, i)),
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(markSheet), "MARK");
+
   XLSX.writeFile(
     wb,
     `Result_Analysis_${meta.batch}_${meta.section}.xlsx`,

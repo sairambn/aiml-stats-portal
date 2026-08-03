@@ -2,7 +2,7 @@ import type { Student, Subject } from "@/lib/analysis";
 
 export const meta = {
   institution: "Jeppiaar Nagar, Rajiv Gandhi Salai, Chennai - 119",
-  department: "DEPARTMENT OF ARTIFICIAL INTELLIGENCE AND MACHINE LEARNING",
+  department: "DEPARTMENT OF INFORMATION TECHNOLOGY",
   title: "INTERNAL ASSESSMENT II RESULT ANALYSIS",
   year: "II",
   semester: "IV",
