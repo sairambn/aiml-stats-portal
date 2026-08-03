@@ -222,7 +222,7 @@ export function Portal() {
                 {subjects.map((s) => (
                   <li key={s.code} className="rounded-md border border-border/70 p-2 text-xs">
                     <span className="font-mono font-semibold text-accent">{s.code}</span>
-                    <p className="mt-0.5 font-medium">{s.subject.name}</p>
+                    <p className="mt-0.5 font-medium">{s.name}</p>
                   </li>
                 ))}
               </ul>
