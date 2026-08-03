@@ -15,17 +15,11 @@ import { parseWorkbook } from "@/lib/parse-sheet";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Result Analysis Portal" },
+      { title: "Result Analysis Portal · Exam Cell" },
       {
         name: "description",
         content:
-          "Internal assessment result analysis: pass counts, absentees, subject-wise performance, toppers and category-wise breakdown.",
-      },
-      { property: "og:title", content: "Result Analysis Portal" },
-      {
-        property: "og:description",
-        content:
-          "Generate the full internal assessment result analysis sheet in seconds.",
+          "Professional internal assessment result analysis for exam cell — particulars, subject-wise performance, toppers and arrear groups.",
       },
     ],
   }),
@@ -37,7 +31,7 @@ type TabKey = "overview" | "particulars" | "subjects" | "students" | "toppers";
 const TABS: { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
   { key: "particulars", label: "Particulars" },
-  { key: "subjects", label: "Subject-wise" },
+  { key: "subjects", label: "Subjects" },
   { key: "students", label: "Students" },
   { key: "toppers", label: "Toppers" },
 ];
@@ -63,9 +57,21 @@ function Portal() {
   const [filter, setFilter] = useState<"all" | "pass" | "fail" | "absent">("all");
   const [notice, setNotice] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const a = useMemo(() => analyse(students, subjects, passMark), [students, subjects, passMark]);
+  const a = useMemo(
+    () => analyse(students, subjects, passMark),
+    [students, subjects, passMark],
+  );
+
+  const rankedStudents = useMemo(
+    () =>
+      [...a.results].sort(
+        (x, y) => x.rank - y.rank || x.student.name.localeCompare(y.student.name),
+      ),
+    [a.results],
+  );
 
   const visibleResults = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -118,7 +124,7 @@ function Portal() {
       setExporting(true);
       setNotice(null);
       await exportAnalysisSheet(a, subjects, meta);
-      setNotice("Analysis Excel downloaded with full borders and formatting");
+      setNotice("Analysis Excel downloaded — ready for exam cell");
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Export failed");
     } finally {
@@ -127,47 +133,33 @@ function Portal() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b border-border bg-card">
-        <div className="mx-auto max-w-7xl px-6 py-8">
-          <p className="font-mono text-xs uppercase tracking-[0.28em] text-accent">
-            {meta.institution}
-          </p>
-          <h1 className="mt-3 font-display text-3xl leading-tight tracking-tight sm:text-4xl">
-            Result Analysis Portal
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            {meta.title} · Year {meta.year} · Semester {meta.semester} · Batch{" "}
-            {meta.batch} · Section {meta.section}
-          </p>
+    <div className="flex min-h-screen bg-background text-foreground">
+      <aside
+        className={`print:hidden sticky top-0 flex h-screen shrink-0 flex-col border-r border-border bg-card transition-all duration-200 ${
+          sidebarOpen ? "w-80" : "w-0 overflow-hidden border-0"
+        }`}
+      >
+        <div className="flex h-full w-80 flex-col">
+          <div className="border-b border-border px-5 py-5">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent">
+              Exam Cell
+            </p>
+            <h2 className="mt-1 font-display text-lg leading-tight tracking-tight">
+              Result Analysis
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+              {meta.department}
+            </p>
+          </div>
 
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".xlsx,.xls,.csv"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleUpload(f);
-                e.target.value = "";
-              }}
-            />
-            <button className="btn-primary" onClick={() => fileRef.current?.click()}>
-              Upload mark sheet
-            </button>
-            <button
-              className="btn-outline"
-              disabled={exporting || a.totalStudents === 0}
-              onClick={() => void exportSheet()}
-            >
-              {exporting ? "Preparing Excel…" : "Export analysis (.xlsx)"}
-            </button>
-            <button className="btn-ghost" onClick={() => window.print()}>
-              Print report
-            </button>
-            <label className="ml-auto flex items-center gap-2 text-sm text-muted-foreground">
-              Pass mark
+          <div className="border-b border-border px-5 py-4 space-y-2 text-xs">
+            <MetaLine label="Assessment" value={meta.title} />
+            <MetaLine label="Year" value={meta.year} />
+            <MetaLine label="Semester" value={meta.semester} />
+            <MetaLine label="Batch" value={meta.batch} />
+            <MetaLine label="Section" value={meta.section} />
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-muted-foreground">Pass mark</span>
               <input
                 type="number"
                 min={1}
@@ -176,365 +168,514 @@ function Portal() {
                 onChange={(e) =>
                   setPassMark(Math.max(1, Math.min(100, Number(e.target.value) || 1)))
                 }
-                className="w-16 rounded-md border border-input bg-background px-2 py-1 text-right font-mono text-sm text-foreground"
+                className="w-14 rounded border border-input bg-background px-2 py-0.5 text-right font-mono text-xs"
               />
-            </label>
+            </div>
           </div>
+
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            <p className="mb-3 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Subjects · Full forms
+            </p>
+            <ul className="space-y-3">
+              {subjects.map((s) => {
+                const st = a.subjectStats.find((x) => x.subject.code === s.code);
+                return (
+                  <li
+                    key={s.code}
+                    className="rounded-md border border-border/70 bg-muted/20 p-3"
+                  >
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-mono text-[11px] font-semibold text-accent">
+                        {s.code}
+                      </span>
+                      {st && (
+                        <span className="font-mono text-[10px] text-muted-foreground">
+                          {fmt(st.passPercent)}%
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs font-medium leading-snug">{s.name}</p>
+                    {s.staff ? (
+                      <p className="mt-1 text-[11px] text-muted-foreground">{s.staff}</p>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+
+            <p className="mb-3 mt-6 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
+              Students · Ranked ({rankedStudents.length})
+            </p>
+            <ul className="space-y-1 pb-6">
+              {rankedStudents.slice(0, 40).map((r) => (
+                <li
+                  key={r.student.reg}
+                  className="flex items-center gap-2 rounded px-1.5 py-1 text-[11px] hover:bg-muted/40"
+                >
+                  <span className="w-5 shrink-0 font-mono text-muted-foreground">
+                    {r.rank}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    {r.student.name}
+                  </span>
+                  <span
+                    className={`shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] ${
+                      r.status === "PASS"
+                        ? "bg-success/15 text-success"
+                        : "bg-destructive/15 text-destructive"
+                    }`}
+                  >
+                    {r.status === "PASS" ? "P" : "F"}
+                  </span>
+                </li>
+              ))}
+              {rankedStudents.length > 40 && (
+                <li className="px-1.5 text-[11px] text-muted-foreground">
+                  +{rankedStudents.length - 40} more
+                </li>
+              )}
+            </ul>
+          </div>
+        </div>
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="border-b border-border bg-card">
+          <div className="flex flex-wrap items-start justify-between gap-4 px-6 py-5">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  className="print:hidden rounded-md border border-border px-2 py-1 text-xs text-muted-foreground hover:bg-muted"
+                  onClick={() => setSidebarOpen((v) => !v)}
+                  title="Toggle sidebar"
+                >
+                  {sidebarOpen ? "Hide panel" : "Show panel"}
+                </button>
+                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent">
+                  {meta.institution}
+                </p>
+              </div>
+              <h1 className="mt-2 font-display text-2xl tracking-tight sm:text-3xl">
+                {meta.title || "Result Analysis"}
+              </h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Year {meta.year} · Sem {meta.semester} · Batch {meta.batch} · Sec{" "}
+                {meta.section}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 print:hidden">
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleUpload(f);
+                  e.target.value = "";
+                }}
+              />
+              <button className="btn-primary" onClick={() => fileRef.current?.click()}>
+                Upload mark sheet
+              </button>
+              <button
+                className="btn-outline"
+                disabled={exporting || a.totalStudents === 0}
+                onClick={() => void exportSheet()}
+              >
+                {exporting ? "Preparing…" : "Export analysis"}
+              </button>
+              <button className="btn-ghost" onClick={() => window.print()}>
+                Print
+              </button>
+            </div>
+          </div>
+
           {notice && (
-            <p className="mt-4 rounded-md border border-accent/40 bg-accent/10 px-3 py-2 text-sm text-accent-foreground">
+            <p className="border-t border-accent/30 bg-accent/10 px-6 py-2 text-sm text-accent-foreground">
               {notice}
             </p>
           )}
-        </div>
-      </header>
 
-      <nav className="sticky top-0 z-10 border-b border-border bg-card/95 backdrop-blur print:hidden">
-        <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-6">
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
-                tab === t.key
-                  ? "border-accent text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </nav>
+          <nav className="print:hidden flex gap-1 overflow-x-auto border-t border-border px-6">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`whitespace-nowrap border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+                  tab === t.key
+                    ? "border-accent text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </nav>
+        </header>
 
-      <main className="mx-auto max-w-7xl space-y-8 px-6 py-10">
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat
-            label="Total students"
-            value={String(a.totalStudents)}
-            hint={`${a.appeared} appeared`}
-          />
-          <Stat
-            label="Passed all subjects"
-            value={String(a.passedAll)}
-            hint={`${fmt(a.passPercent)}% pass`}
-            tone="good"
-          />
-          <Stat
-            label="Failed"
-            value={String(a.failed)}
-            hint={`${a.results.filter((r) => r.arrears >= 3).length} with 3+ arrears`}
-            tone="bad"
-          />
-          <Stat
-            label="Absentees"
-            value={String(a.totalAbsentEntries)}
-            hint={`${a.studentsWithAbsence} students affected`}
-            tone="warn"
-          />
-        </section>
+        <main className="mx-auto w-full max-w-6xl flex-1 space-y-6 px-6 py-8">
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Stat
+              label="Total students"
+              value={String(a.totalStudents)}
+              hint={`${a.appeared} appeared`}
+            />
+            <Stat
+              label="Passed all subjects"
+              value={String(a.passedAll)}
+              hint={`${fmt(a.passPercent)}% pass`}
+              tone="good"
+            />
+            <Stat
+              label="Failed"
+              value={String(a.failed)}
+              hint={`${a.results.filter((r) => r.arrears >= 3).length} with 3+ arrears`}
+              tone="bad"
+            />
+            <Stat
+              label="Absentees"
+              value={String(a.totalAbsentEntries)}
+              hint={`${a.studentsWithAbsence} students affected`}
+              tone="warn"
+            />
+          </section>
 
-        {tab === "overview" && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Panel title="Pass percentage per subject">
-              <div className="space-y-4">
-                {a.subjectStats.map((s) => (
-                  <div key={s.subject.code}>
-                    <div className="flex items-baseline justify-between gap-3 text-sm">
-                      <span className="font-medium">
-                        <span className="font-mono text-xs text-accent">{s.subject.code}</span>{" "}
-                        {s.subject.name}
-                      </span>
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {fmt(s.passPercent)}%
-                      </span>
+          {tab === "overview" && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Panel title="Pass percentage per subject">
+                <div className="space-y-4">
+                  {a.subjectStats.map((s) => (
+                    <div key={s.subject.code}>
+                      <div className="flex items-baseline justify-between gap-3 text-sm">
+                        <span className="font-medium">
+                          <span className="font-mono text-xs text-accent">
+                            {s.subject.code}
+                          </span>{" "}
+                          {s.subject.name}
+                        </span>
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {fmt(s.passPercent)}%
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full bg-accent transition-[width] duration-500"
+                          style={{ width: `${Math.min(100, s.passPercent)}%` }}
+                        />
+                      </div>
                     </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-accent transition-[width] duration-500"
-                        style={{ width: `${Math.min(100, s.passPercent)}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Panel>
-            <Panel title="Arrear distribution">
-              <div className="space-y-3">
-                {[
-                  ["No arrears (all clear)", a.results.filter((r) => r.arrears === 0).length],
-                  ["Failed in 1 subject", a.results.filter((r) => r.arrears === 1).length],
-                  ["Failed in 2 subjects", a.results.filter((r) => r.arrears === 2).length],
-                  ["Failed in 3 & above", a.results.filter((r) => r.arrears >= 3).length],
-                ].map(([label, count]) => (
-                  <div key={String(label)} className="flex items-center gap-3">
-                    <span className="w-44 shrink-0 text-sm text-muted-foreground">{label}</span>
-                    <div className="h-6 flex-1 overflow-hidden rounded-md bg-muted">
-                      <div
-                        className="h-full bg-primary/80"
-                        style={{
-                          width: `${a.totalStudents ? (Number(count) / a.totalStudents) * 100 : 0}%`,
-                        }}
-                      />
-                    </div>
-                    <span className="w-8 text-right font-mono text-sm">{count}</span>
-                  </div>
-                ))}
-              </div>
-              <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-4 text-sm">
-                <div>
-                  <dt className="text-muted-foreground">Class average</dt>
-                  <dd className="font-display text-xl">{fmt(a.classAverage)}%</dd>
+                  ))}
                 </div>
-                <div>
-                  <dt className="text-muted-foreground">Subjects</dt>
-                  <dd className="font-display text-xl">{subjects.length}</dd>
+              </Panel>
+              <Panel title="Arrear distribution">
+                <div className="space-y-3">
+                  {(
+                    [
+                      [
+                        "No arrears (all clear)",
+                        a.results.filter((r) => r.arrears === 0).length,
+                      ],
+                      [
+                        "Failed in 1 subject",
+                        a.results.filter((r) => r.arrears === 1).length,
+                      ],
+                      [
+                        "Failed in 2 subjects",
+                        a.results.filter((r) => r.arrears === 2).length,
+                      ],
+                      [
+                        "Failed in 3 & above",
+                        a.results.filter((r) => r.arrears >= 3).length,
+                      ],
+                    ] as const
+                  ).map(([label, count]) => (
+                    <div key={label} className="flex items-center gap-3">
+                      <span className="w-44 shrink-0 text-sm text-muted-foreground">
+                        {label}
+                      </span>
+                      <div className="h-6 flex-1 overflow-hidden rounded-md bg-muted">
+                        <div
+                          className="h-full bg-primary/80"
+                          style={{
+                            width: `${a.totalStudents ? (count / a.totalStudents) * 100 : 0}%`,
+                          }}
+                        />
+                      </div>
+                      <span className="w-8 text-right font-mono text-sm">{count}</span>
+                    </div>
+                  ))}
                 </div>
-              </dl>
-            </Panel>
-          </div>
-        )}
+                <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-4 text-sm">
+                  <div>
+                    <dt className="text-muted-foreground">Class average</dt>
+                    <dd className="font-display text-xl">{fmt(a.classAverage)}%</dd>
+                  </div>
+                  <div>
+                    <dt className="text-muted-foreground">Subjects</dt>
+                    <dd className="font-display text-xl">{subjects.length}</dd>
+                  </div>
+                </dl>
+              </Panel>
+            </div>
+          )}
 
-        {tab === "particulars" && (
-          <Panel title="Particulars (category-wise)">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left">
-                    <Th>S.No.</Th>
-                    <Th>Particulars</Th>
-                    <Th align="right">Total</Th>
-                    {CATEGORY_KEYS.map((k) => (
-                      <Th key={k} align="right">
-                        <span className="font-mono text-[11px]">{k}</span>
-                      </Th>
+          {tab === "particulars" && (
+            <Panel title="Particulars (category-wise)">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px] border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left">
+                      <Th>S.No.</Th>
+                      <Th>Particulars</Th>
+                      <Th align="right">Total</Th>
+                      {CATEGORY_KEYS.map((k) => (
+                        <Th key={k} align="right">
+                          <span className="font-mono text-[11px]">{k}</span>
+                        </Th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {a.particulars.map((p, i) => (
+                      <tr key={p.label} className="border-b border-border/60 hover:bg-muted/50">
+                        <Td>{i + 1}</Td>
+                        <Td>{p.label}</Td>
+                        <Td align="right" mono>
+                          <strong>{p.total}</strong>
+                        </Td>
+                        {CATEGORY_KEYS.map((k) => (
+                          <Td key={k} align="right" mono>
+                            {p.byCategory[k]}
+                          </Td>
+                        ))}
+                      </tr>
                     ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {a.particulars.map((p, i) => (
-                    <tr key={p.label} className="border-b border-border/60 hover:bg-muted/50">
-                      <Td>{i + 1}</Td>
-                      <Td>{p.label}</Td>
+                    <tr className="bg-muted/60">
+                      <Td>{a.particulars.length + 1}</Td>
+                      <Td>Pass percentage</Td>
                       <Td align="right" mono>
-                        <strong>{p.total}</strong>
+                        <strong>{fmt(a.passPercent, 2)}%</strong>
                       </Td>
                       {CATEGORY_KEYS.map((k) => (
-                        <Td key={k} align="right" mono>
-                          {p.byCategory[k]}
-                        </Td>
+                        <Td key={k} />
                       ))}
                     </tr>
-                  ))}
-                  <tr className="bg-muted/60">
-                    <Td>{a.particulars.length + 1}</Td>
-                    <Td>Pass percentage</Td>
-                    <Td align="right" mono>
-                      <strong>{fmt(a.passPercent, 2)}%</strong>
-                    </Td>
-                    {CATEGORY_KEYS.map((k) => (
-                      <Td key={k} />
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            <ul className="mt-4 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
-              {CATEGORY_KEYS.map((k) => (
-                <li key={k}>
-                  <span className="font-mono text-accent">{k}</span> — {CATEGORY_LABEL[k]} (
-                  {a.categoryCounts[k]})
-                </li>
-              ))}
-            </ul>
-          </Panel>
-        )}
-
-        {tab === "subjects" && (
-          <Panel title="Subject wise performance">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left">
-                    <Th>S.No</Th>
-                    <Th>Code</Th>
-                    <Th>Subject</Th>
-                    <Th>Staff</Th>
-                    <Th align="right">Appeared</Th>
-                    <Th align="right">Absent</Th>
-                    <Th align="right">Passed</Th>
-                    <Th align="right">Failed</Th>
-                    <Th align="right">Pass %</Th>
-                    <Th align="right">Avg</Th>
-                    <Th align="right">High</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {a.subjectStats.map((s, i) => (
-                    <tr key={s.subject.code} className="border-b border-border/60 hover:bg-muted/50">
-                      <Td>{i + 1}</Td>
-                      <Td mono>{s.subject.code}</Td>
-                      <Td>{s.subject.name}</Td>
-                      <Td>{s.subject.staff || "—"}</Td>
-                      <Td align="right" mono>
-                        {s.appeared}
-                      </Td>
-                      <Td align="right" mono>
-                        {s.absent}
-                      </Td>
-                      <Td align="right" mono>
-                        {s.passed}
-                      </Td>
-                      <Td align="right" mono>
-                        {s.failed}
-                      </Td>
-                      <Td align="right" mono>
-                        {fmt(s.passPercent)}
-                      </Td>
-                      <Td align="right" mono>
-                        {fmt(s.average)}
-                      </Td>
-                      <Td align="right" mono>
-                        {s.highest}
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Panel>
-        )}
-
-        {tab === "students" && (
-          <Panel
-            title={`Student results (${visibleResults.length})`}
-            actions={
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search name or reg no"
-                  className="w-56 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
-                />
-                {(["all", "pass", "fail", "absent"] as const).map((f) => (
-                  <button
-                    key={f}
-                    onClick={() => setFilter(f)}
-                    className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors ${
-                      filter === f
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {f}
-                  </button>
-                ))}
+                  </tbody>
+                </table>
               </div>
-            }
-          >
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] border-collapse text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left">
-                    <Th align="right">Rank</Th>
-                    <Th>Reg No</Th>
-                    <Th>Name</Th>
-                    {subjects.map((s) => (
-                      <Th key={s.code} align="right">
-                        <span className="font-mono text-[11px]">{s.code}</span>
-                      </Th>
+              <ul className="mt-4 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                {CATEGORY_KEYS.map((k) => (
+                  <li key={k}>
+                    <span className="font-mono text-accent">{k}</span> — {CATEGORY_LABEL[k]} (
+                    {a.categoryCounts[k]})
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
+
+          {tab === "subjects" && (
+            <Panel title="Subject wise performance">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[820px] border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left">
+                      <Th>S.No</Th>
+                      <Th>Code</Th>
+                      <Th>Subject</Th>
+                      <Th>Staff</Th>
+                      <Th align="right">Appeared</Th>
+                      <Th align="right">Absent</Th>
+                      <Th align="right">Passed</Th>
+                      <Th align="right">Failed</Th>
+                      <Th align="right">Pass %</Th>
+                      <Th align="right">Avg</Th>
+                      <Th align="right">High</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {a.subjectStats.map((s, i) => (
+                      <tr key={s.subject.code} className="border-b border-border/60 hover:bg-muted/50">
+                        <Td>{i + 1}</Td>
+                        <Td mono>{s.subject.code}</Td>
+                        <Td>{s.subject.name}</Td>
+                        <Td>{s.subject.staff || "—"}</Td>
+                        <Td align="right" mono>
+                          {s.appeared}
+                        </Td>
+                        <Td align="right" mono>
+                          {s.absent}
+                        </Td>
+                        <Td align="right" mono>
+                          {s.passed}
+                        </Td>
+                        <Td align="right" mono>
+                          {s.failed}
+                        </Td>
+                        <Td align="right" mono>
+                          {fmt(s.passPercent)}
+                        </Td>
+                        <Td align="right" mono>
+                          {fmt(s.average)}
+                        </Td>
+                        <Td align="right" mono>
+                          {s.highest}
+                        </Td>
+                      </tr>
                     ))}
-                    <Th align="right">Total</Th>
-                    <Th align="right">%</Th>
-                    <Th align="right">Arrears</Th>
-                    <Th align="right">Absent</Th>
-                    <Th>Status</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleResults.map((r) => (
-                    <tr key={r.student.reg} className="border-b border-border/60 hover:bg-muted/50">
-                      <Td align="right" mono>
-                        {r.rank}
-                      </Td>
-                      <Td mono>{r.student.reg}</Td>
-                      <Td>{r.student.name}</Td>
-                      {r.student.marks.map((m, i) => (
-                        <Td key={i} align="right" mono>
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          )}
+
+          {tab === "students" && (
+            <Panel
+              title={`Student results (${visibleResults.length})`}
+              actions={
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search name or reg no"
+                    className="w-56 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+                  />
+                  {(["all", "pass", "fail", "absent"] as const).map((f) => (
+                    <button
+                      key={f}
+                      onClick={() => setFilter(f)}
+                      className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors ${
+                        filter === f
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-muted text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              }
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[900px] border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left">
+                      <Th align="right">Rank</Th>
+                      <Th>Reg No</Th>
+                      <Th>Name</Th>
+                      {subjects.map((s) => (
+                        <Th key={s.code} align="right">
+                          <span className="font-mono text-[11px]">{s.code}</span>
+                        </Th>
+                      ))}
+                      <Th align="right">Total</Th>
+                      <Th align="right">%</Th>
+                      <Th align="right">Arrears</Th>
+                      <Th align="right">Absent</Th>
+                      <Th>Status</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleResults.map((r) => (
+                      <tr key={r.student.reg} className="border-b border-border/60 hover:bg-muted/50">
+                        <Td align="right" mono>
+                          {r.rank}
+                        </Td>
+                        <Td mono>{r.student.reg}</Td>
+                        <Td>{r.student.name}</Td>
+                        {r.student.marks.map((m, i) => (
+                          <Td key={i} align="right" mono>
+                            <span
+                              className={
+                                isAbsent(m)
+                                  ? "text-warning"
+                                  : typeof m === "number" && m < passMark
+                                    ? "text-destructive"
+                                    : ""
+                              }
+                            >
+                              {m === null ? "—" : m}
+                            </span>
+                          </Td>
+                        ))}
+                        <Td align="right" mono>
+                          {r.total}
+                        </Td>
+                        <Td align="right" mono>
+                          {fmt(r.percent)}
+                        </Td>
+                        <Td align="right" mono>
+                          {r.arrears}
+                        </Td>
+                        <Td align="right" mono>
+                          {r.absents}
+                        </Td>
+                        <Td>
                           <span
-                            className={
-                              isAbsent(m)
-                                ? "text-warning"
-                                : typeof m === "number" && m < passMark
-                                  ? "text-destructive"
-                                  : ""
-                            }
+                            className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                              r.status === "PASS"
+                                ? "bg-success/15 text-success"
+                                : "bg-destructive/15 text-destructive"
+                            }`}
                           >
-                            {m === null ? "—" : m}
+                            {r.status}
                           </span>
                         </Td>
-                      ))}
-                      <Td align="right" mono>
-                        {r.total}
-                      </Td>
-                      <Td align="right" mono>
-                        {fmt(r.percent)}
-                      </Td>
-                      <Td align="right" mono>
-                        {r.arrears}
-                      </Td>
-                      <Td align="right" mono>
-                        {r.absents}
-                      </Td>
-                      <Td>
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                            r.status === "PASS"
-                              ? "bg-success/15 text-success"
-                              : "bg-destructive/15 text-destructive"
-                          }`}
-                        >
-                          {r.status}
-                        </span>
-                      </Td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </Panel>
-        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Panel>
+          )}
 
-        {tab === "toppers" && (
-          <Panel title="Topper list">
-            <ol className="grid gap-3 sm:grid-cols-2">
-              {a.toppers.map((r) => (
-                <li
-                  key={r.student.reg}
-                  className="flex items-center gap-4 rounded-lg border border-border bg-card p-4"
-                >
-                  <span className="font-display text-2xl text-accent">
-                    {["I", "II", "III", "IV", "V"][r.rank - 1] ?? r.rank}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{r.student.name}</p>
-                    <p className="font-mono text-xs text-muted-foreground">{r.student.reg}</p>
-                  </div>
-                  <div className="ml-auto text-right">
-                    <p className="font-display text-lg">{r.total}</p>
-                    <p className="font-mono text-xs text-muted-foreground">
-                      {fmt(r.percent, 2)}%
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </Panel>
-        )}
-      </main>
+          {tab === "toppers" && (
+            <Panel title="Topper list">
+              <ol className="grid gap-3 sm:grid-cols-2">
+                {a.toppers.map((r) => (
+                  <li
+                    key={r.student.reg}
+                    className="flex items-center gap-4 rounded-lg border border-border bg-card p-4"
+                  >
+                    <span className="font-display text-2xl text-accent">
+                      {["I", "II", "III", "IV", "V"][r.rank - 1] ?? r.rank}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{r.student.name}</p>
+                      <p className="font-mono text-xs text-muted-foreground">
+                        {r.student.reg}
+                      </p>
+                    </div>
+                    <div className="ml-auto text-right">
+                      <p className="font-display text-lg">{r.total}</p>
+                      <p className="font-mono text-xs text-muted-foreground">
+                        {fmt(r.percent, 2)}%
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            </Panel>
+          )}
+        </main>
 
-      <footer className="border-t border-border py-8 text-center text-xs text-muted-foreground">
-        Prepared by · HOD · Vice Principal · Principal
-      </footer>
+        <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
+          Prepared by · HOD · Vice Principal · Principal
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function MetaLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <span className="shrink-0 text-muted-foreground">{label}</span>
+      <span className="text-right font-medium leading-snug">{value || "—"}</span>
     </div>
   );
 }
