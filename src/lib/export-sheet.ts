@@ -94,7 +94,7 @@ export async function exportAnalysisSheet(
   passMark = 50,
 ) {
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Result Analysis Portal";
+  wb.creator = "Result Analysis Portal · Sairam BN";
   wb.created = new Date();
 
   const cat = a.categoryCounts;
@@ -301,14 +301,44 @@ export async function exportAnalysisSheet(
     setCell(sr, 14, Math.round(s.passPercent), { border: true, center: true });
   });
 
-  row += 4;
-  // Developer credit (replaces institutional PREPARED BY / HOD / VICE PRINCIPAL / PRINCIPAL)
+  // ── Developer credit (replaces PREPARED BY · HOD · VICE PRINCIPAL · PRINCIPAL)
+  row += 3;
   front.mergeCells(row, 1, row, 16);
-  const credit = front.getCell(row, 1);
-  credit.value = "Developed by Sairam BN  ·  https://github.com/sairambn/aiml-stats-portal  ·  https://bnsairam.vercel.app/";
-  credit.font = { name: "Calibri", size: 10, bold: true };
-  credit.alignment = { horizontal: "center", vertical: "middle" };
-  front.getRow(row).height = 22;
+  const creditTitle = front.getCell(row, 1);
+  creditTitle.value = "Developed by Sairam BN";
+  creditTitle.font = { name: "Calibri", size: 11, bold: true, color: { argb: "FF0F172A" } };
+  creditTitle.alignment = { horizontal: "center", vertical: "middle" };
+  front.getRow(row).height = 20;
+
+  row += 1;
+  front.mergeCells(row, 1, row, 8);
+  const gh = front.getCell(row, 1);
+  gh.value = {
+    text: "github.com/sairambn/aiml-stats-portal",
+    hyperlink: "https://github.com/sairambn/aiml-stats-portal",
+  };
+  gh.font = {
+    name: "Calibri",
+    size: 9,
+    color: { argb: "FF0563C1" },
+    underline: true,
+  };
+  gh.alignment = { horizontal: "right", vertical: "middle" };
+
+  front.mergeCells(row, 9, row, 16);
+  const site = front.getCell(row, 9);
+  site.value = {
+    text: "bnsairam.vercel.app",
+    hyperlink: "https://bnsairam.vercel.app/",
+  };
+  site.font = {
+    name: "Calibri",
+    size: 9,
+    color: { argb: "FF0563C1" },
+    underline: true,
+  };
+  site.alignment = { horizontal: "left", vertical: "middle" };
+  front.getRow(row).height = 18;
 
   row += 2;
   front.mergeCells(row, 1, row, 16);

@@ -494,15 +494,31 @@ export function Portal() {
         </main>
 
         <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
-          Designed and crafted by{" "}
-          <a
-            href="https://bnsairam.vercel.app/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-accent hover:underline"
-          >
-            https://bnsairam.vercel.app/
-          </a>
+          <p>
+            Developed by{" "}
+            <span className="font-medium text-foreground">Sairam BN</span>
+          </p>
+          <p className="mt-1.5 flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
+            <a
+              href="https://github.com/sairambn/aiml-stats-portal"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent hover:underline"
+            >
+              github.com/sairambn/aiml-stats-portal
+            </a>
+            <span className="text-border" aria-hidden>
+              ·
+            </span>
+            <a
+              href="https://bnsairam.vercel.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent hover:underline"
+            >
+              bnsairam.vercel.app
+            </a>
+          </p>
         </footer>
       </div>
     </div>
