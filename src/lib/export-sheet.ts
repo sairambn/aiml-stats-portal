@@ -309,6 +309,22 @@ export async function exportAnalysisSheet(
   setCell(sig, 10, "VICE PRINCIPAL", { bold: true, center: true });
   setCell(sig, 14, "PRINCIPAL", { bold: true, center: true });
 
+  row += 2;
+  front.mergeCells(row, 1, row, 16);
+  const gen = front.getCell(row, 1);
+  gen.value = `Generated on ${new Date().toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  })} · Result Analysis Portal`;
+  gen.font = {
+    name: "Calibri",
+    size: 9,
+    italic: true,
+    color: { argb: "FF666666" },
+  };
+  gen.alignment = { horizontal: "center" };
+
   const mark = wb.addWorksheet("MARK", {
     views: [{ showGridLines: false }],
     pageSetup: {
@@ -373,7 +389,10 @@ export async function exportAnalysisSheet(
     return r;
   };
 
-  const writeStudentRows = (startRow: number, list: typeof a.results): number => {
+  const writeStudentRows = (
+    startRow: number,
+    list: typeof a.results,
+  ): number => {
     let r = startRow;
     list.forEach((res, i) => {
       const row = mark.getRow(r);
@@ -505,10 +524,11 @@ export async function exportAnalysisSheet(
   });
   const safeBatch = (meta.batch || "batch").replace(/[^\w-]+/g, "_");
   const safeSection = (meta.section || "sec").replace(/[^\w-]+/g, "_");
+  const stamp = new Date().toISOString().slice(0, 10);
   const url = URL.createObjectURL(blob);
   const aEl = document.createElement("a");
   aEl.href = url;
-  aEl.download = `Result_Analysis_${safeBatch}_${safeSection}.xlsx`;
+  aEl.download = `Result_Analysis_${safeBatch}_${safeSection}_${stamp}.xlsx`;
   document.body.appendChild(aEl);
   aEl.click();
   document.body.removeChild(aEl);
