@@ -1,17 +1,16 @@
 import { useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import * as XLSX from "xlsx";
 import {
   analyse,
   fmt,
   isAbsent,
-  type Mark,
   type Student,
   type Subject,
   CATEGORY_KEYS,
 } from "@/lib/analysis";
 import { meta as seedMeta, seedStudents, seedSubjects } from "@/data/seed";
-import { exportAnalysisSheet } from "@/lib/export-sheet";
+import { exportAnalysisSheet, type ExportMeta } from "@/lib/export-sheet";
+import { parseWorkbook } from "@/lib/parse-sheet";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -57,6 +56,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 function Portal() {
   const [students, setStudents] = useState<Student[]>(seedStudents);
   const [subjects, setSubjects] = useState<Subject[]>(seedSubjects);
+  const [meta, setMeta] = useState<ExportMeta>({ ...seedMeta });
   const [passMark, setPassMark] = useState(seedMeta.passMark);
   const [tab, setTab] = useState<TabKey>("overview");
   const [query, setQuery] = useState("");
@@ -85,46 +85,26 @@ function Portal() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const wb = XLSX.read(e.target?.result, { type: "array" });
-        const sheet =
-          wb.Sheets["MARK"] ?? wb.Sheets[wb.SheetNames[wb.SheetNames.length - 1] ?? ""];
-        const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet!, { header: 1 });
-        const headerIdx = grid.findIndex((row) =>
-          row.some((c) => typeof c === "string" && /reg\.?\s*no/i.test(c)),
+        const buf = e.target?.result;
+        if (!(buf instanceof ArrayBuffer)) throw new Error("Could not read file");
+        const parsed = parseWorkbook(buf);
+        setStudents(parsed.students);
+        setSubjects(parsed.subjects);
+        setMeta((prev) => ({
+          ...prev,
+          ...parsed.meta,
+          institution: parsed.meta.institution || prev.institution,
+          department: parsed.meta.department || prev.department,
+          title: parsed.meta.title || prev.title,
+          year: parsed.meta.year || prev.year,
+          semester: parsed.meta.semester || prev.semester,
+          batch: parsed.meta.batch || prev.batch,
+          section: parsed.meta.section || prev.section,
+        }));
+        setNotice(
+          `Loaded ${parsed.students.length} students · ${parsed.subjects.length} subjects from ${file.name}`,
         );
-        if (headerIdx < 0) throw new Error("Could not find a 'REG. NO.' header row");
-        const header = grid[headerIdx] as unknown[];
-        const subjectCols: { col: number; subject: Subject }[] = [];
-        header.forEach((cell, col) => {
-          if (typeof cell !== "string" || col < 3) return;
-          const m = cell.match(/^\s*([A-Z]{2}\d{4})\s*&?\s*(.*)$/);
-          if (m) subjectCols.push({ col, subject: { code: m[1] ?? "", name: (m[2] ?? "").trim(), staff: "" } });
-        });
-        if (!subjectCols.length) throw new Error("No subject columns found");
-
-        const parsed: Student[] = [];
-        for (const row of grid.slice(headerIdx + 1)) {
-          const reg = String(row[1] ?? "").trim();
-          if (!/^\d{6,}$/.test(reg)) continue;
-          if (parsed.some((p) => p.reg === reg)) continue;
-          parsed.push({
-            reg,
-            name: String(row[2] ?? "").trim(),
-            gender: String(row[3] ?? "B").trim(),
-            quota: String(row[4] ?? "C").trim(),
-            stay: String(row[5] ?? "DS").trim(),
-            marks: subjectCols.map(({ col }) => {
-              const v = row[col];
-              if (v === undefined || v === null || v === "") return null;
-              if (typeof v === "number") return Math.round(v) as Mark;
-              return /^ab$/i.test(String(v).trim()) ? ("AB" as Mark) : (Number(v) || 0);
-            }),
-          });
-        }
-        if (!parsed.length) throw new Error("No student rows found");
-        setSubjects(subjectCols.map((s) => s.subject));
-        setStudents(parsed);
-        setNotice(`Loaded ${parsed.length} students and ${subjectCols.length} subjects from ${file.name}`);
+        setTab("overview");
       } catch (err) {
         setNotice(err instanceof Error ? err.message : "Could not read that file");
       }
@@ -133,7 +113,7 @@ function Portal() {
   }
 
   function exportSheet() {
-    exportAnalysisSheet(a, subjects, seedMeta);
+    exportAnalysisSheet(a, subjects, meta);
   }
 
   return (
@@ -141,14 +121,14 @@ function Portal() {
       <header className="border-b border-border bg-card">
         <div className="mx-auto max-w-7xl px-6 py-8">
           <p className="font-mono text-xs uppercase tracking-[0.28em] text-accent">
-            {seedMeta.institution}
+            {meta.institution}
           </p>
           <h1 className="mt-3 font-display text-3xl leading-tight tracking-tight sm:text-4xl">
             Result Analysis Portal
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-            {seedMeta.title} · Year {seedMeta.year} · Semester {seedMeta.semester} ·
-            Batch {seedMeta.batch} · Section {seedMeta.section}
+            {meta.title} · Year {meta.year} · Semester {meta.semester} · Batch{" "}
+            {meta.batch} · Section {meta.section}
           </p>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -179,7 +159,9 @@ function Portal() {
                 min={1}
                 max={100}
                 value={passMark}
-                onChange={(e) => setPassMark(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
+                onChange={(e) =>
+                  setPassMark(Math.max(1, Math.min(100, Number(e.target.value) || 1)))
+                }
                 className="w-16 rounded-md border border-input bg-background px-2 py-1 text-right font-mono text-sm text-foreground"
               />
             </label>
@@ -212,10 +194,29 @@ function Portal() {
 
       <main className="mx-auto max-w-7xl space-y-8 px-6 py-10">
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <Stat label="Total students" value={String(a.totalStudents)} hint={`${a.appeared} appeared`} />
-          <Stat label="Passed all subjects" value={String(a.passedAll)} hint={`${fmt(a.passPercent)}% pass`} tone="good" />
-          <Stat label="Failed" value={String(a.failed)} hint={`${a.results.filter((r) => r.arrears >= 3).length} with 3+ arrears`} tone="bad" />
-          <Stat label="Absentees" value={String(a.totalAbsentEntries)} hint={`${a.studentsWithAbsence} students affected`} tone="warn" />
+          <Stat
+            label="Total students"
+            value={String(a.totalStudents)}
+            hint={`${a.appeared} appeared`}
+          />
+          <Stat
+            label="Passed all subjects"
+            value={String(a.passedAll)}
+            hint={`${fmt(a.passPercent)}% pass`}
+            tone="good"
+          />
+          <Stat
+            label="Failed"
+            value={String(a.failed)}
+            hint={`${a.results.filter((r) => r.arrears >= 3).length} with 3+ arrears`}
+            tone="bad"
+          />
+          <Stat
+            label="Absentees"
+            value={String(a.totalAbsentEntries)}
+            hint={`${a.studentsWithAbsence} students affected`}
+            tone="warn"
+          />
         </section>
 
         {tab === "overview" && (
@@ -360,13 +361,27 @@ function Portal() {
                       <Td mono>{s.subject.code}</Td>
                       <Td>{s.subject.name}</Td>
                       <Td>{s.subject.staff || "—"}</Td>
-                      <Td align="right" mono>{s.appeared}</Td>
-                      <Td align="right" mono>{s.absent}</Td>
-                      <Td align="right" mono>{s.passed}</Td>
-                      <Td align="right" mono>{s.failed}</Td>
-                      <Td align="right" mono>{fmt(s.passPercent)}</Td>
-                      <Td align="right" mono>{fmt(s.average)}</Td>
-                      <Td align="right" mono>{s.highest}</Td>
+                      <Td align="right" mono>
+                        {s.appeared}
+                      </Td>
+                      <Td align="right" mono>
+                        {s.absent}
+                      </Td>
+                      <Td align="right" mono>
+                        {s.passed}
+                      </Td>
+                      <Td align="right" mono>
+                        {s.failed}
+                      </Td>
+                      <Td align="right" mono>
+                        {fmt(s.passPercent)}
+                      </Td>
+                      <Td align="right" mono>
+                        {fmt(s.average)}
+                      </Td>
+                      <Td align="right" mono>
+                        {s.highest}
+                      </Td>
                     </tr>
                   ))}
                 </tbody>
@@ -424,7 +439,9 @@ function Portal() {
                 <tbody>
                   {visibleResults.map((r) => (
                     <tr key={r.student.reg} className="border-b border-border/60 hover:bg-muted/50">
-                      <Td align="right" mono>{r.rank}</Td>
+                      <Td align="right" mono>
+                        {r.rank}
+                      </Td>
                       <Td mono>{r.student.reg}</Td>
                       <Td>{r.student.name}</Td>
                       {r.student.marks.map((m, i) => (
@@ -442,10 +459,18 @@ function Portal() {
                           </span>
                         </Td>
                       ))}
-                      <Td align="right" mono>{r.total}</Td>
-                      <Td align="right" mono>{fmt(r.percent)}</Td>
-                      <Td align="right" mono>{r.arrears}</Td>
-                      <Td align="right" mono>{r.absents}</Td>
+                      <Td align="right" mono>
+                        {r.total}
+                      </Td>
+                      <Td align="right" mono>
+                        {fmt(r.percent)}
+                      </Td>
+                      <Td align="right" mono>
+                        {r.arrears}
+                      </Td>
+                      <Td align="right" mono>
+                        {r.absents}
+                      </Td>
                       <Td>
                         <span
                           className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -482,7 +507,9 @@ function Portal() {
                   </div>
                   <div className="ml-auto text-right">
                     <p className="font-display text-lg">{r.total}</p>
-                    <p className="font-mono text-xs text-muted-foreground">{fmt(r.percent, 2)}%</p>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {fmt(r.percent, 2)}%
+                    </p>
                   </div>
                 </li>
               ))}
