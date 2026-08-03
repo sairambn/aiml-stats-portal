@@ -10,7 +10,7 @@ Upload a section mark sheet → view diagrams and tables → download a professi
 
 ## Quick start (30 seconds)
 
-1. Open the [live portal](https://aiml-stats-portal.vercel.app) **or** run locally (`npm install && npm run dev`).
+1. Open the [live portal](https://aiml-stats-portal.vercel.app) **or** run locally.
 2. Upload a mark sheet (`.xlsx`) — or click **Load demo data** to try instantly.
 3. Review Overview diagrams, Subjects, Students, Toppers.
 4. Optionally **Merge name list** (Reg.No + Name) for official spellings.
@@ -22,8 +22,6 @@ No student data is stored on the server. Refresh clears the session.
 ---
 
 ## Sample file for testing
-
-A ready-to-use sample is available:
 
 | File | Contents |
 |------|----------|
@@ -99,16 +97,15 @@ Download from the repo (`public/samples/`) or use the built-in **Load demo data*
 ## Local development
 
 ```bash
-npm install
-npm run dev
+bun install          # or: npm install
+bun run dev          # or: npm run dev
 ```
 
 ```bash
-npm run build
-npm run preview
+bun run build && bun run preview
 ```
 
-Stack: TanStack Start · React 19 · Tailwind 4 · ExcelJS · SheetJS · Recharts · Vercel
+Stack: **TanStack Start** · React 19 · Tailwind 4 · ExcelJS · SheetJS · Recharts · Vercel
 
 ---
 
@@ -134,14 +131,15 @@ Stack: TanStack Start · React 19 · Tailwind 4 · ExcelJS · SheetJS · Rechart
 
 ## Project structure (core)
 
-```
+```text
 src/
   lib/
     parse-sheet.ts   # Excel → students / subjects / meta
     analysis.ts      # Pass/fail, arrears, particulars, ranks
     export-sheet.ts  # FRONT + MARK professional export
   data/seed.ts       # Demo students & subjects
-  routes/index.tsx   # Main portal UI
+  routes/
+    portal.tsx       # Main portal UI
   components/
     result-charts.tsx
 ```
@@ -150,4 +148,6 @@ src/
 
 ## License
 
-Private academic / exam-cell use.
+[MIT](./LICENSE) — free for academic and exam-cell use.
+
+Built by [@sairambn](https://github.com/sairambn)
