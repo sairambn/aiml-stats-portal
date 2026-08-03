@@ -59,7 +59,11 @@ function Portal() {
   const [filter, setFilter] = useState<"all" | "pass" | "fail" | "absent">("all");
   const [notice, setNotice] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 1024 : true,
+  );
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const nameListRef = useRef<HTMLInputElement>(null);
 
@@ -92,6 +96,8 @@ function Portal() {
   }, [a.results, query, filter]);
 
   function handleUpload(file: File) {
+    setUploading(true);
+    setNotice(null);
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -116,9 +122,16 @@ function Portal() {
           `Loaded ${parsed.students.length} students · ${parsed.subjects.length} subjects (${codes}) from ${file.name}`,
         );
         setTab("overview");
+        setSidebarOpen(true);
       } catch (err) {
         setNotice(err instanceof Error ? err.message : "Could not read that file");
+      } finally {
+        setUploading(false);
       }
+    };
+    reader.onerror = () => {
+      setNotice("Could not read that file");
+      setUploading(false);
     };
     reader.readAsArrayBuffer(file);
   }
@@ -426,8 +439,12 @@ function Portal() {
                   e.target.value = "";
                 }}
               />
-              <button className="btn-primary" onClick={() => fileRef.current?.click()}>
-                Upload mark sheet
+              <button
+                className="btn-primary"
+                disabled={uploading}
+                onClick={() => fileRef.current?.click()}
+              >
+                {uploading ? "Uploading…" : "Upload mark sheet"}
               </button>
               <input
                 ref={nameListRef}
@@ -493,26 +510,46 @@ function Portal() {
 
         <main className="mx-auto w-full max-w-6xl flex-1 space-y-6 px-6 py-8">
           {students.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card px-6 py-20 text-center">
+            <div
+              className={`flex flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-20 text-center transition-colors ${
+                dragOver
+                  ? "border-accent bg-accent/10"
+                  : "border-border bg-card"
+              }`}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                const f = e.dataTransfer.files?.[0];
+                if (f) handleUpload(f);
+              }}
+            >
               <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-accent">
                 Exam Cell
               </p>
               <h2 className="mt-3 font-display text-2xl tracking-tight">
-                Upload a mark sheet to begin
+                {uploading ? "Reading mark sheet…" : "Upload a mark sheet to begin"}
               </h2>
               <p className="mt-2 max-w-md text-sm text-muted-foreground">
-                No data is stored. On refresh this page is empty until you upload
-                an Excel mark sheet. Analysis and export stay on your device.
+                Drag & drop an Excel file here, or click to browse. Nothing is
+                stored on the server — refresh clears the session.
               </p>
               <button
                 className="btn-primary mt-8"
+                disabled={uploading}
                 onClick={() => fileRef.current?.click()}
               >
-                Upload mark sheet
+                {uploading ? "Uploading…" : "Upload mark sheet"}
               </button>
-              <p className="mt-4 text-xs text-muted-foreground">
-                Accepts .xlsx · MARK sheet with REG. NO. and subject codes
-              </p>
+              <ul className="mt-6 max-w-sm space-y-1 text-left text-xs text-muted-foreground">
+                <li>· Supports IT RA sheets (FRONT + MARK) and AIML/IAT sheets</li>
+                <li>· Needs Reg.No and subject codes (e.g. CS3452)</li>
+                <li>· Optional: Merge name list after upload</li>
+              </ul>
             </div>
           ) : (
             <>
