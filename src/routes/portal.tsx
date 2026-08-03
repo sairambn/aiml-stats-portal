@@ -501,7 +501,7 @@ export function Portal() {
             rel="noopener noreferrer"
             className="text-accent hover:underline"
           >
-            Sairam BN
+            https://bnsairam.vercel.app/
           </a>
         </footer>
       </div>
