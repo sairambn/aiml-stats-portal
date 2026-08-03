@@ -17,13 +17,27 @@ function parseMark(v: unknown): Mark {
   if (v === undefined || v === null || v === "") return null;
   if (typeof v === "number") return Math.round(v);
   const s = String(v).trim();
-  // AB = absent, OD = on duty (treat as absent for scoring)
+  // AB = absent, OD = on duty, NA = not applicable
   if (/^(ab|od|na|n\/?a|-)$/i.test(s)) return "AB";
   const n = Number(s);
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
 const CODE_RE = /([A-Z]{2,4}\d{3,4})/i;
+
+/** Common short forms → full subject names */
+const SHORT_NAMES: Record<string, string> = {
+  TOC: "Theory of Computation",
+  OS: "Operating Systems",
+  DBDM: "Database Design and Management",
+  DBMS: "Database Management Systems",
+  AI: "Artificial Intelligence",
+  ML: "Machine Learning",
+  MI: "Machine Learning",
+  EVS: "Environmental Sciences and Sustainability",
+  WE: "Web Essentials",
+  AIML: "Artificial Intelligence and Machine Learning",
+};
 
 function parseMetaFromGrid(grid: unknown[][]): Partial<ExportMeta> {
   const meta: Partial<ExportMeta> = {};
@@ -41,12 +55,8 @@ function parseMetaFromGrid(grid: unknown[][]): Partial<ExportMeta> {
     ) {
       meta.institution = first;
     }
-    if (
-      !meta.department &&
-      (first || joined) &&
-      /department/i.test(first || joined)
-    ) {
-      meta.department = first || joined;
+    if (!meta.department && /department/i.test(first || joined)) {
+      meta.department = first || joined.match(/department[^,]*/i)?.[0] || joined;
     }
     if (
       !meta.title &&
@@ -70,47 +80,58 @@ function parseMetaFromGrid(grid: unknown[][]): Partial<ExportMeta> {
   return meta;
 }
 
-function parseSubjectsFromFront(
+/** Scan whole grid for CODE → full name / staff pairs (legend or FRONT table) */
+function collectCodeInfo(
   grid: unknown[][],
 ): Map<string, { name: string; staff: string }> {
   const map = new Map<string, { name: string; staff: string }>();
-  const subjIdx = grid.findIndex((row) =>
-    row.some(
-      (c) =>
-        typeof c === "string" &&
-        (/subject\s*wise/i.test(String(c)) ||
-          (/subject\s*code/i.test(String(c)) &&
-            row.some((x) => /subject\s*name/i.test(String(x ?? ""))))),
-    ),
-  );
-  if (subjIdx < 0) return map;
 
-  for (const row of grid.slice(subjIdx, subjIdx + 40)) {
+  for (const row of grid) {
     const cells = row as unknown[];
     for (let c = 0; c < cells.length; c++) {
-      const codeMatch = cellStr(cells[c]).match(/^([A-Z]{2,4}\d{3,4})$/i);
-      if (!codeMatch) continue;
-      const code = codeMatch[1].toUpperCase();
-      let name = "";
-      let staff = "";
-      for (let k = c + 1; k < Math.min(c + 12, cells.length); k++) {
-        const s = cellStr(cells[k]);
-        if (!s) continue;
-        if (
-          !name &&
-          !/^\d+$/.test(s) &&
-          !/\b(AP|PROF|DR\.?|MR\.?|MS\.?|MRS\.?)\b/i.test(s)
-        ) {
-          name = s.replace(/^\s*&\s*/, "").trim();
-          continue;
+      const raw = cellStr(cells[c]);
+      // Pure code cell: CS3452
+      const pure = raw.match(/^([A-Z]{2,4}\d{3,4})$/i);
+      if (pure) {
+        const code = pure[1].toUpperCase();
+        let name = "";
+        let staff = "";
+        for (let k = c + 1; k < Math.min(c + 8, cells.length); k++) {
+          const s = cellStr(cells[k]);
+          if (!s) continue;
+          if (
+            !name &&
+            !/^\d+(\.\d+)?$/.test(s) &&
+            !CODE_RE.test(s) &&
+            !/\b(AP|PROF|DR\.?|MR\.?|MS\.?|MRS\.?)\b/i.test(s)
+          ) {
+            name = s.replace(/^\s*&\s*/, "").trim();
+            continue;
+          }
+          if (/\b(AP|PROF|DR\.?|MR\.?|MS\.?|MRS\.?)\b/i.test(s) || /\//.test(s)) {
+            staff = s;
+            break;
+          }
         }
-        if (/\b(AP|PROF|DR\.?|MR\.?|MS\.?|MRS\.?)\b/i.test(s) || /\//.test(s)) {
-          staff = s;
-          break;
-        }
+        const prev = map.get(code);
+        map.set(code, {
+          name: name || prev?.name || "",
+          staff: staff || prev?.staff || "",
+        });
+        continue;
       }
-      if (!map.has(code)) {
-        map.set(code, { name: name || code, staff });
+
+      // Combined: CS3452 & Theory of Computation
+      const combined = raw.match(
+        /^([A-Z]{2,4}\d{3,4})\s*[&\-–:]\s*(.+)$/i,
+      );
+      if (combined) {
+        const code = combined[1].toUpperCase();
+        const name = combined[2].trim();
+        const prev = map.get(code);
+        if (name && name.length > 3) {
+          map.set(code, { name, staff: prev?.staff || "" });
+        }
       }
     }
   }
@@ -122,8 +143,8 @@ function isIdentityHeader(h: string): boolean {
   return (
     /^(SL\.?\s*NO\.?|S\.?NO\.?|SNO|S\.NO)$/.test(u) ||
     (/REG/.test(u) && /NO/.test(u)) ||
-    (/^NAME$/.test(u) ||
-      (/NAME/.test(u) && !/SUB/.test(u) && !CODE_RE.test(u))) ||
+    /^NAME$/.test(u) ||
+    (/NAME/.test(u) && !/SUB/.test(u) && !CODE_RE.test(u)) ||
     /^(B\/?G|C\/?M|G\/?M|H\/?DS|E\/?T)$/.test(u) ||
     /^(TOTAL|PASS\s*%?|ARREAR.*|ABSENT|STATUS|PERCENTAGE)$/i.test(u)
   );
@@ -134,14 +155,13 @@ function extractSubjectFromHeader(
 ): { code: string; name: string } | null {
   if (!text || isIdentityHeader(text)) return null;
 
-  // CS3452(TOC) or CS3452 & Theory... or CS3452-Name or CS3452 Name
+  // CS3452(TOC) | CS3452 & Theory... | CS3452-Name | CS3452 Name
   const m = text.match(
     /^\s*([A-Z]{2,4}\d{3,4})\s*(?:\(([^)]*)\)|[&\-–:]*\s*(.*))?\s*$/i,
   );
   if (m) {
     const code = m[1].toUpperCase();
     let name = (m[2] || m[3] || "").trim().replace(/^[&\-–:]+\s*/, "");
-    // Strip surrounding parens leftovers
     name = name.replace(/^\(|\)$/g, "").trim();
     if (/^(total|pass\s*%?|arrear.*|absent|status|percentage)$/i.test(name))
       return null;
@@ -159,11 +179,42 @@ function extractSubjectFromHeader(
   return { code, name: name || code };
 }
 
+function resolveSubjectName(
+  code: string,
+  extractedName: string,
+  info: Map<string, { name: string; staff: string }>,
+): string {
+  const fromInfo = info.get(code)?.name;
+  if (fromInfo && fromInfo.length > 3) return fromInfo;
+
+  const short = extractedName.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (SHORT_NAMES[short]) return SHORT_NAMES[short];
+  if (SHORT_NAMES[extractedName.toUpperCase()])
+    return SHORT_NAMES[extractedName.toUpperCase()];
+
+  if (extractedName && extractedName !== code && extractedName.length > 3) {
+    return extractedName;
+  }
+  return extractedName || code;
+}
+
+function findLegendStart(header: unknown[], afterCol: number): number | undefined {
+  let emptyRun = 0;
+  for (let col = afterCol; col < header.length; col++) {
+    if (!cellStr(header[col])) {
+      emptyRun += 1;
+      if (emptyRun >= 2) return col - emptyRun + 1;
+    } else {
+      emptyRun = 0;
+    }
+  }
+  return undefined;
+}
+
 function collectSubjectsFromRow(
   header: unknown[],
   skipCols: Set<number>,
-  frontSubjects: Map<string, { name: string; staff: string }>,
-  /** Prefer columns that look like mark columns (before long empty gap / legend) */
+  codeInfo: Map<string, { name: string; staff: string }>,
   preferBeforeCol?: number,
 ): { col: number; subject: Subject }[] {
   const subjectCols: { col: number; subject: Subject }[] = [];
@@ -181,41 +232,18 @@ function collectSubjectsFromRow(
     if (seenCodes.has(extracted.code)) continue;
     seenCodes.add(extracted.code);
 
-    const fromFront = frontSubjects.get(extracted.code);
-    let name = extracted.name;
-    // Expand short names from legend/FRONT when header is only CODE(SHORT)
-    if (
-      fromFront?.name &&
-      (name === extracted.code || name.length <= 6 || /^\(.*\)$/.test(name))
-    ) {
-      name = fromFront.name;
-    }
-
+    const info = codeInfo.get(extracted.code);
     subjectCols.push({
       col,
       subject: {
         code: extracted.code,
-        name,
-        staff: fromFront?.staff ?? "",
+        name: resolveSubjectName(extracted.code, extracted.name, codeInfo),
+        staff: info?.staff ?? "",
       },
     });
   }
 
   return subjectCols.sort((a, b) => a.col - b.col);
-}
-
-/** Find first empty stretch after subjects that indicates a side legend */
-function findLegendStart(header: unknown[], afterCol: number): number | undefined {
-  let emptyRun = 0;
-  for (let col = afterCol; col < header.length; col++) {
-    if (!cellStr(header[col])) {
-      emptyRun += 1;
-      if (emptyRun >= 2) return col - emptyRun + 1;
-    } else {
-      emptyRun = 0;
-    }
-  }
-  return undefined;
 }
 
 export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
@@ -248,12 +276,12 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
   }
 
   const meta = parseMetaFromGrid(markGrid);
+  let codeInfo = collectCodeInfo(markGrid);
 
   const frontName =
     wb.SheetNames.find((n) => /^front$/i.test(n)) ??
     wb.SheetNames.find((n) => /front/i.test(n));
 
-  let frontSubjects = new Map<string, { name: string; staff: string }>();
   if (frontName && wb.Sheets[frontName] && frontName !== markName) {
     const frontGrid = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[frontName], {
       header: 1,
@@ -268,13 +296,15 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
     if (frontMeta.semester) meta.semester = frontMeta.semester;
     if (frontMeta.batch) meta.batch = frontMeta.batch;
     if (frontMeta.section) meta.section = frontMeta.section;
-    frontSubjects = parseSubjectsFromFront(frontGrid);
-  }
 
-  // Also parse subject legend from the same MARK sheet (code/name side columns)
-  const markLegend = parseSubjectsFromFront(markGrid);
-  for (const [code, info] of markLegend) {
-    if (!frontSubjects.has(code)) frontSubjects.set(code, info);
+    const frontInfo = collectCodeInfo(frontGrid);
+    for (const [code, info] of frontInfo) {
+      const prev = codeInfo.get(code);
+      codeInfo.set(code, {
+        name: info.name || prev?.name || "",
+        staff: info.staff || prev?.staff || "",
+      });
+    }
   }
 
   const candidateIdxs: number[] = [];
@@ -293,7 +323,6 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
 
   let headerIdx = candidateIdxs[0];
   let subjectCols: { col: number; subject: Subject }[] = [];
-  // -1 means "column not present in this sheet"
   let colReg = 1;
   let colName = 2;
   let colGender = -1;
@@ -315,14 +344,14 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
       if (
         (h === "NAME" || h === "STUDENT'SNAME" || h === "STUDENTSNAME") &&
         !CODE_RE.test(h)
-      )
+      ) {
         cName = col;
+      }
       if (h === "B/G" || h === "BG") cGender = col;
       if (h === "C/M" || h === "CM" || h === "G/M") cQuota = col;
       if (h === "H/DS" || h === "HDS") cStay = col;
     });
 
-    // Fallbacks only when clearly missing identity labels
     if (cReg < 0) cReg = 1;
     if (cName < 0) cName = 2;
 
@@ -332,15 +361,13 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
     if (cGender >= 0) skip.add(cGender);
     if (cQuota >= 0) skip.add(cQuota);
     if (cStay >= 0) skip.add(cStay);
-    // Skip S.No column if present
+
     header.forEach((cell, col) => {
-      const h = cellStr(cell).toUpperCase();
-      if (/^(SL\.?\s*NO\.?|S\.?NO\.?|SNO|S\.NO)$/.test(h.replace(/\s+/g, "")))
-        skip.add(col);
-      if (/^E\s*\/?\s*T$/.test(h)) skip.add(col);
+      const h = cellStr(cell).toUpperCase().replace(/\s+/g, "");
+      if (/^(SL\.?NO\.?|S\.?NO\.?|SNO|S\.NO)$/.test(h)) skip.add(col);
+      if (/^E\/?T$/.test(h)) skip.add(col);
     });
 
-    // Don't pick up side legend codes (usually after empty columns)
     const legendStart = findLegendStart(
       header,
       Math.max(cReg, cName, cGender, cQuota, cStay, 0) + 1,
@@ -349,7 +376,7 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
     const found = collectSubjectsFromRow(
       header,
       skip,
-      frontSubjects,
+      codeInfo,
       legendStart,
     );
 
@@ -368,18 +395,6 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
     throw new Error(
       "No subject columns found. Header must include codes like CS3452, AL3452, GE3451.",
     );
-  }
-
-  // Enrich short names from legend (e.g. TOC → Theory of Computation)
-  for (const sc of subjectCols) {
-    const info = frontSubjects.get(sc.subject.code);
-    if (
-      info?.name &&
-      (sc.subject.name === sc.subject.code || sc.subject.name.length <= 6)
-    ) {
-      sc.subject.name = info.name;
-    }
-    if (info?.staff && !sc.subject.staff) sc.subject.staff = info.staff;
   }
 
   const parsed: Student[] = [];
