@@ -86,8 +86,8 @@ function Portal() {
       try {
         const wb = XLSX.read(e.target?.result, { type: "array" });
         const sheet =
-          wb.Sheets["MARK"] ?? wb.Sheets[wb.SheetNames[wb.SheetNames.length - 1]];
-        const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1 });
+          wb.Sheets["MARK"] ?? wb.Sheets[wb.SheetNames[wb.SheetNames.length - 1] ?? ""];
+        const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet!, { header: 1 });
         const headerIdx = grid.findIndex((row) =>
           row.some((c) => typeof c === "string" && /reg\.?\s*no/i.test(c)),
         );
@@ -97,7 +97,7 @@ function Portal() {
         header.forEach((cell, col) => {
           if (typeof cell !== "string" || col < 3) return;
           const m = cell.match(/^\s*([A-Z]{2}\d{4})\s*&?\s*(.*)$/);
-          if (m) subjectCols.push({ col, subject: { code: m[1], name: m[2].trim(), staff: "" } });
+          if (m) subjectCols.push({ col, subject: { code: m[1] ?? "", name: (m[2] ?? "").trim(), staff: "" } });
         });
         if (!subjectCols.length) throw new Error("No subject columns found");
 
@@ -138,7 +138,7 @@ function Portal() {
       [seedMeta.title],
       [`YEAR: ${seedMeta.year}`, `SEMESTER: ${seedMeta.semester}`, `BATCH: ${seedMeta.batch}`, `SECTION: ${seedMeta.section}`],
       [],
-      ["S.No.", "PARTICULARS", "TOTAL", ...CATEGORY_KEYS.map((k) => CATEGORY_LABEL[k])],
+      ["S.No.", "PARTICULARS", "TOTAL", ...CATEGORY_KEYS.map((k) => CATEGORY_LABEL[k] ?? k)],
       ...a.particulars.map((p, i) => [
         i + 1,
         p.label.toUpperCase(),
