@@ -1,51 +1,79 @@
 # Result Analysis Portal
 
-College internal assessment result analysis tool for exam cell use.
+Professional internal assessment result analysis for college exam cell use.
 
-Upload a mark sheet Excel and get a full analysis report in the department FRONT + MARK format.
+Upload a section mark sheet and generate the official **FRONT + MARK** analysis workbook with category breakdown, subject-wise performance, toppers and arrear groups.
+
+---
 
 ## Features
 
-- Upload `.xlsx` mark sheets (MARK + optional FRONT)
-- Auto category breakdown (Counselling / Management × Hosteller / Day Scholar × Boys / Girls)
-- Subject-wise pass %, toppers, arrear groups
-- Editable department / year / semester / batch / section before export
-- Export analysis Excel matching exam cell layout
-- Print-friendly view
+| Area | What you get |
+|------|----------------|
+| **Upload** | Reads MARK (and FRONT) sheets — students, B/G, C/M, H/DS, marks, AB |
+| **Sidebar** | Full subject names + staff, ranked student names, batch meta, pass mark |
+| **Overview** | Pass %, arrear distribution, class average |
+| **Particulars** | Counselling / Management × Hosteller / Day Scholar × Boys / Girls |
+| **Subjects** | Appeared, absent, passed, failed, pass %, average, highest |
+| **Students** | Rank, marks, arrears, search & filter |
+| **Toppers** | Top ranks with totals |
+| **Export** | Excel with borders, merged headers, highlights — exam cell ready |
 
-## How to use (exam cell)
+---
 
-1. Open the portal
-2. Click **Upload mark sheet** and select the section mark Excel
-3. Confirm counts on Overview (total, passed all, failed, absentees)
-4. Adjust department / title / year / section if needed
-5. Set **Pass mark** (default 50)
-6. Click **Export analysis (.xlsx)** and save the file
-7. Optional: **Print report** for hard copy review
+## Quick start (exam cell)
 
-## Expected Excel format
+1. Open the deployed portal  
+2. **Upload mark sheet** → select the section `.xlsx`  
+3. Confirm totals on Overview  
+4. Adjust pass mark if needed (default **50**)  
+5. **Export analysis** → download FRONT + MARK workbook  
+6. Submit the file to exam cell  
 
-**MARK sheet** header row must include:
+---
 
-`SL.NO | REG. NO. | STUDENT'S NAME | B/G | C/M | H/DS | E/T | <SUBCODE> & <Name> ... | TOTAL | PASS % | ARREAR COUNT`
+## Expected mark sheet format
 
-- B/G = Boy / Girl
-- C/M = Counselling / Management
-- H/DS = Hosteller / Day Scholar
-- Marks: number or `AB` for absent
+Header row on **MARK**:
 
-**FRONT sheet** (optional) supplies institution, department, title, and staff names.
+```
+SL.NO | REG. NO. | STUDENT'S NAME | B/G | C/M | H/DS | E/T | <CODE> & <Subject Name> … | TOTAL | PASS % | ARREAR COUNT
+```
 
-## Development
+| Column | Meaning |
+|--------|---------|
+| B/G | Boy / Girl |
+| C/M | Counselling / Management |
+| H/DS | Hosteller / Day Scholar |
+| Marks | Number, or `AB` for absent |
 
-```sh
+Optional **FRONT** sheet supplies institution, department, title, year, semester, batch, section and staff names.
+
+---
+
+## Local development
+
+```bash
 npm install
 npm run dev
 ```
 
-## Build
-
-```sh
+```bash
 npm run build
 npm run preview
 ```
+
+---
+
+## Tech
+
+- TanStack Start (React + Vite)  
+- ExcelJS (styled export with borders)  
+- SheetJS / xlsx (parse)  
+- Tailwind CSS  
+
+---
+
+## License
+
+Private institutional use — Result Analysis Portal.
