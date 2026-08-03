@@ -928,7 +928,8 @@ function Td({
 }) {
   return (
     <td
-      className={`px-3 py-2 ${align === "right" ? "text-right" : ""} ${\n        mono ? "font-mono text-xs" : ""
+      className={`px-3 py-2 ${align === "right" ? "text-right" : ""} ${
+        mono ? "font-mono text-xs" : ""
       }`}
     >
       {children}
