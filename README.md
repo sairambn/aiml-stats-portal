@@ -1,53 +1,79 @@
 # Result Analysis Portal
 
-Professional internal assessment result analysis for college exam cell use.
+**Exam-cell ready** internal assessment result analysis.
 
-Upload a section mark sheet and generate the official **FRONT + MARK** analysis workbook with category breakdown, subject-wise performance, toppers and arrear groups.
+Upload a section mark sheet → view diagrams and tables → download a professional **FRONT + MARK** Excel report.
+
+**Live:** [aiml-stats-portal.vercel.app](https://aiml-stats-portal.vercel.app)
+
+---
+
+## What it does
+
+| Step | Action |
+|------|--------|
+| 1 | **Upload mark sheet** (`.xlsx`) |
+| 2 | Portal reads students, subjects, marks, absents |
+| 3 | Overview **diagrams** + pass / fail / arrear stats |
+| 4 | Optional **Merge name list** (official names by Reg.No) |
+| 5 | **Export analysis** → exam-cell Excel with borders |
+
+No student data is stored on the server. Refresh clears the session.
 
 ---
 
 ## Features
 
-| Area | What you get |
-|------|----------------|
-| **Upload** | Reads MARK (and FRONT) sheets — students, B/G, C/M, H/DS, marks, AB |
-| **Sidebar** | Full subject names + staff, ranked student names, batch meta, pass mark |
-| **Overview** | Pass %, arrear distribution, class average |
-| **Particulars** | Counselling / Management × Hosteller / Day Scholar × Boys / Girls |
-| **Subjects** | Appeared, absent, passed, failed, pass %, average, highest |
-| **Students** | Rank, marks, arrears, search & filter |
-| **Toppers** | Top ranks with totals |
-| **Export** | Excel with borders, merged headers, highlights — exam cell ready |
+### Upload formats supported
+
+- **Full RA sheet** — `FRONT` + `MARK` with B/G, C/M, H/DS, category tables  
+- **Simple IAT / AIML mark sheet** — `S.No | Reg.No | Name | CS3452(TOC) | …`  
+- Subject headers: `CS3452 & Theory of Computation` **or** `CS3452(TOC)`  
+- Marks: numbers, `AB`, `OD` (on duty → treated as absent)
+
+### Analysis
+
+- Pass / fail / absentee totals (configurable pass mark, default **50**)
+- Subject-wise: appeared, absent, passed, failed, pass %, average, highest
+- Arrear groups: all clear, 1 subject, 2 subjects, 3+
+- Category particulars: Counselling / Management × Hosteller / Day Scholar × Boys / Girls
+- Ranked toppers and full student table with search & filters
+
+### Diagrams (Overview)
+
+- Subject-wise pass / fail bar chart
+- Arrear distribution pie chart
+- Pass vs fail overview chart
+- Subject summary with progress bars
+
+### Sidebar
+
+- Editable assessment meta (title, department, year, semester, batch, section)
+- Full subject names + staff + pass %
+- Ranked student names with P/F
+
+### Export Excel
+
+- **FRONT** — institution header, particulars table, topper list, subject-wise performance, signature block
+- **MARK** — full student list, summary rows, arrear section groups
+- Professional borders, merged headers, AB (yellow), fail marks (red)
+- Landscape, fit-to-page print layout
+
+### Name list merge
+
+After uploading marks, use **Merge name list** with an Excel that has `Reg.No` and `Name` columns. Names are matched by register number.
 
 ---
 
-## Quick start (exam cell)
+## Exam cell workflow
 
-1. Open the deployed portal  
-2. **Upload mark sheet** → select the section `.xlsx`  
-3. Confirm totals on Overview  
-4. Adjust pass mark if needed (default **50**)  
-5. **Export analysis** → download FRONT + MARK workbook  
-6. Submit the file to exam cell  
-
----
-
-## Expected mark sheet format
-
-Header row on **MARK**:
-
-```
-SL.NO | REG. NO. | STUDENT'S NAME | B/G | C/M | H/DS | E/T | <CODE> & <Subject Name> … | TOTAL | PASS % | ARREAR COUNT
-```
-
-| Column | Meaning |
-|--------|---------|
-| B/G | Boy / Girl |
-| C/M | Counselling / Management |
-| H/DS | Hosteller / Day Scholar |
-| Marks | Number, or `AB` for absent |
-
-Optional **FRONT** sheet supplies institution, department, title, year, semester, batch, section and staff names.
+1. Open the portal (empty until you upload)
+2. **Upload mark sheet**
+3. Check the notice: student count and subject codes
+4. Review **Overview** diagrams and **Subjects** table
+5. (Optional) **Merge name list** for official spellings
+6. Adjust pass mark in the sidebar if needed
+7. **Export analysis** → submit the downloaded file
 
 ---
 
@@ -63,17 +89,30 @@ npm run build
 npm run preview
 ```
 
+Stack: TanStack Start · React · Tailwind · ExcelJS · SheetJS · Recharts · Vercel
+
 ---
 
-## Tech
+## Expected mark sheet columns
 
-- TanStack Start (React + Vite)  
-- ExcelJS (styled export with borders)  
-- SheetJS / xlsx (parse)  
-- Tailwind CSS  
+**Minimum**
+
+| Column | Example |
+|--------|---------|
+| Reg.No | `310824148001` |
+| Name | `STUDENT NAME` |
+| Subject codes | `CS3452(TOC)` or `CS3452 & Theory of Computation` |
+
+**Optional (for category tables)**
+
+| Column | Values |
+|--------|--------|
+| B/G | B / G |
+| C/M | C / M |
+| H/DS | H / DS |
 
 ---
 
 ## License
 
-Private institutional use — Result Analysis Portal.
+Private academic / exam-cell use.
