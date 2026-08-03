@@ -39,25 +39,9 @@ function applyBorder(
   cell.border = border;
 }
 
-function styleHeader(cell: ExcelJS.Cell) {
-  cell.font = { bold: true, size: 11, name: "Calibri" };
-  cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-  applyBorder(cell, allMedium);
-  cell.fill = {
-    type: "pattern",
-    pattern: "solid",
-    fgColor: { argb: "FFE8EEF7" },
-  };
-}
-
 function styleTitle(cell: ExcelJS.Cell, size = 14) {
   cell.font = { bold: true, size, name: "Calibri" };
   cell.alignment = { horizontal: "center", vertical: "middle" };
-}
-
-function styleCenter(cell: ExcelJS.Cell) {
-  cell.alignment = { horizontal: "center", vertical: "middle" };
-  cell.font = { name: "Calibri", size: 10 };
 }
 
 function styleLeft(cell: ExcelJS.Cell) {
@@ -107,6 +91,7 @@ export async function exportAnalysisSheet(
   a: Analysis,
   subjects: Subject[],
   meta: ExportMeta,
+  passMark = 50,
 ) {
   const wb = new ExcelJS.Workbook();
   wb.creator = "Result Analysis Portal";
@@ -118,7 +103,6 @@ export async function exportAnalysisSheet(
   const hostM = (cat["M-H-B"] ?? 0) + (cat["M-H-G"] ?? 0);
   const dayM = (cat["M-DS-B"] ?? 0) + (cat["M-DS-G"] ?? 0);
 
-  // ───────── FRONT sheet ─────────
   const front = wb.addWorksheet("FRONT", {
     views: [{ showGridLines: false }],
     pageSetup: {
@@ -130,31 +114,26 @@ export async function exportAnalysisSheet(
     },
   });
 
-  // Column widths matching department template (A–P)
   const frontWidths = [6, 42, 4, 4, 4, 4, 4, 10, 9, 9, 9, 9, 9, 9, 9, 9];
   frontWidths.forEach((w, i) => {
     front.getColumn(i + 1).width = w;
   });
 
-  // Row 1 – institution
   front.mergeCells(1, 1, 1, 16);
   styleTitle(front.getCell(1, 1), 13);
   front.getCell(1, 1).value = meta.institution;
   front.getRow(1).height = 22;
 
-  // Row 2 – department
   front.mergeCells(2, 1, 2, 16);
   styleTitle(front.getCell(2, 1), 12);
   front.getCell(2, 1).value = meta.department;
   front.getRow(2).height = 20;
 
-  // Row 3 – title
   front.mergeCells(3, 1, 3, 16);
   styleTitle(front.getCell(3, 1), 12);
   front.getCell(3, 1).value = meta.title;
   front.getRow(3).height = 20;
 
-  // Row 4 – year / semester / batch / section
   const metaRow = front.getRow(4);
   setCell(metaRow, 1, "YEAR  :", { bold: true });
   setCell(metaRow, 2, meta.year, { bold: true, center: true });
@@ -167,10 +146,8 @@ export async function exportAnalysisSheet(
   setCell(metaRow, 14, meta.section, { bold: true, center: true });
   metaRow.height = 18;
 
-  // Row 5 empty
   front.getRow(5).height = 8;
 
-  // Row 6 – main header: S.No | PARTICULARS | TOTAL | COUNSELLING | MANAGEMENT
   const h1 = front.getRow(6);
   h1.height = 18;
   setCell(h1, 1, "S.No.", { header: true });
@@ -184,7 +161,6 @@ export async function exportAnalysisSheet(
   setCell(h1, 13, "MANAGEMENT", { header: true });
   for (let c = 14; c <= 16; c++) applyBorder(h1.getCell(c), allMedium);
 
-  // Row 7 – HOSTELLER / DAY SCHOLAR groups
   const h2 = front.getRow(7);
   h2.height = 18;
   for (let c = 1; c <= 8; c++) applyBorder(h2.getCell(c));
@@ -201,7 +177,6 @@ export async function exportAnalysisSheet(
   setCell(h2, 15, `DAY SCHOLAR(${dayM})`, { header: true });
   applyBorder(h2.getCell(16), allMedium);
 
-  // Row 8 – BOYS / GIRLS
   const h3 = front.getRow(8);
   h3.height = 16;
   for (let c = 1; c <= 8; c++) applyBorder(h3.getCell(c));
@@ -210,7 +185,6 @@ export async function exportAnalysisSheet(
     setCell(h3, 9 + i, g, { header: true });
   });
 
-  // Particulars data rows (9 …)
   const catOrder = [
     "C-H-B",
     "C-H-G",
@@ -235,7 +209,6 @@ export async function exportAnalysisSheet(
     });
   });
 
-  // Pass percentage row
   const passRowIdx = 9 + a.particulars.length;
   const passRow = front.getRow(passRowIdx);
   passRow.height = 17;
@@ -250,7 +223,6 @@ export async function exportAnalysisSheet(
   });
   for (let c = 9; c <= 16; c++) applyBorder(passRow.getCell(c));
 
-  // Topper list
   let row = passRowIdx + 2;
   front.mergeCells(row, 1, row, 16);
   styleTitle(front.getCell(row, 1), 12);
@@ -260,29 +232,15 @@ export async function exportAnalysisSheet(
   row += 1;
   const topH = front.getRow(row);
   topH.height = 17;
-  const topHeaders = [
-    "",
-    "S.NO",
-    "REG.NO",
-    "PHOTO",
-    "STUDENTS NAME",
-    "",
-    "",
-    "",
-    "",
-    "TOTAL",
-    "",
-    "PASS %",
-    "",
-    "RANK",
-  ];
-  topHeaders.forEach((h, i) => {
-    if (h) setCell(topH, i + 1, h, { header: true });
-    else applyBorder(topH.getCell(i + 1), allMedium);
-  });
-  // merge name columns
+  for (let c = 1; c <= 16; c++) applyBorder(topH.getCell(c), allMedium);
+  setCell(topH, 2, "S.NO", { header: true });
+  setCell(topH, 3, "REG.NO", { header: true });
+  setCell(topH, 4, "PHOTO", { header: true });
   front.mergeCells(row, 5, row, 9);
   setCell(topH, 5, "STUDENTS NAME", { header: true });
+  setCell(topH, 10, "TOTAL", { header: true });
+  setCell(topH, 12, "PASS %", { header: true });
+  setCell(topH, 14, "RANK", { header: true });
 
   a.toppers.slice(0, 3).forEach((t, i) => {
     row += 1;
@@ -292,7 +250,7 @@ export async function exportAnalysisSheet(
       t.rank === 1 ? "I" : t.rank === 2 ? "II" : t.rank === 3 ? "III" : String(t.rank);
     setCell(tr, 2, i + 1, { border: true, center: true });
     setCell(tr, 3, t.student.reg, { border: true, center: true });
-    applyBorder(tr.getCell(4)); // PHOTO blank
+    applyBorder(tr.getCell(4));
     front.mergeCells(row, 5, row, 9);
     setCell(tr, 5, t.student.name, { border: true });
     for (let c = 6; c <= 9; c++) applyBorder(tr.getCell(c));
@@ -303,7 +261,6 @@ export async function exportAnalysisSheet(
     setCell(tr, 14, rankLabel, { border: true, center: true, bold: true });
   });
 
-  // Subject wise performance
   row += 2;
   front.mergeCells(row, 1, row, 16);
   styleTitle(front.getCell(row, 1), 12);
@@ -313,23 +270,18 @@ export async function exportAnalysisSheet(
   row += 1;
   const subH = front.getRow(row);
   subH.height = 18;
-  const subHeaders: [number, string][] = [
-    [2, "S.NO"],
-    [3, "SUB CODE"],
-    [4, "SUBJECT NAME"],
-    [6, "STAFF NAME"],
-    [10, "APPEARED"],
-    [11, "ABSENT"],
-    [12, "PASSED"],
-    [13, "FAILED"],
-    [14, "PASS %"],
-  ];
   for (let c = 1; c <= 16; c++) applyBorder(subH.getCell(c), allMedium);
-  subHeaders.forEach(([col, text]) => {
-    setCell(subH, col, text, { header: true });
-  });
+  setCell(subH, 2, "S.NO", { header: true });
+  setCell(subH, 3, "SUB CODE", { header: true });
   front.mergeCells(row, 4, row, 5);
+  setCell(subH, 4, "SUBJECT NAME", { header: true });
   front.mergeCells(row, 6, row, 9);
+  setCell(subH, 6, "STAFF NAME", { header: true });
+  setCell(subH, 10, "APPEARED", { header: true });
+  setCell(subH, 11, "ABSENT", { header: true });
+  setCell(subH, 12, "PASSED", { header: true });
+  setCell(subH, 13, "FAILED", { header: true });
+  setCell(subH, 14, "PASS %", { header: true });
 
   a.subjectStats.forEach((s, i) => {
     row += 1;
@@ -349,7 +301,6 @@ export async function exportAnalysisSheet(
     setCell(sr, 14, Math.round(s.passPercent), { border: true, center: true });
   });
 
-  // Signature row
   row += 4;
   const sig = front.getRow(row);
   sig.height = 22;
@@ -358,7 +309,6 @@ export async function exportAnalysisSheet(
   setCell(sig, 10, "VICE PRINCIPAL", { bold: true, center: true });
   setCell(sig, 14, "PRINCIPAL", { bold: true, center: true });
 
-  // ───────── MARK sheet ─────────
   const mark = wb.addWorksheet("MARK", {
     views: [{ showGridLines: false }],
     pageSetup: {
@@ -371,10 +321,8 @@ export async function exportAnalysisSheet(
   });
 
   const subjectHeaders = subjects.map((s) => `${s.code} & ${s.name}`);
-  const markCols =
-    7 + subjects.length + 3; /* SL, REG, NAME, B/G, C/M, H/DS, E/T + subjects + TOTAL PASS ARREAR */
+  const markCols = 7 + subjects.length + 3;
 
-  // widths
   mark.getColumn(1).width = 6;
   mark.getColumn(2).width = 14;
   mark.getColumn(3).width = 22;
@@ -425,10 +373,7 @@ export async function exportAnalysisSheet(
     return r;
   };
 
-  const writeStudentRows = (
-    startRow: number,
-    list: typeof a.results,
-  ): number => {
+  const writeStudentRows = (startRow: number, list: typeof a.results): number => {
     let r = startRow;
     list.forEach((res, i) => {
       const row = mark.getRow(r);
@@ -452,7 +397,6 @@ export async function exportAnalysisSheet(
           center: ci !== 2,
         });
         if (ci === 2) styleLeft(cell);
-        // highlight AB and low marks lightly
         if (ci >= 7 && ci < 7 + subjects.length) {
           const m = res.student.marks[ci - 7];
           if (m === "AB") {
@@ -461,7 +405,7 @@ export async function exportAnalysisSheet(
               pattern: "solid",
               fgColor: { argb: "FFFFF3CD" },
             };
-          } else if (typeof m === "number" && m < 50) {
+          } else if (typeof m === "number" && m < passMark) {
             cell.fill = {
               type: "pattern",
               pattern: "solid",
@@ -475,7 +419,6 @@ export async function exportAnalysisSheet(
     return r;
   };
 
-  // Header block
   mark.mergeCells(1, 1, 1, markCols);
   styleTitle(mark.getCell(1, 1), 13);
   mark.getCell(1, 1).value = meta.institution;
@@ -505,7 +448,6 @@ export async function exportAnalysisSheet(
   );
   r = writeStudentRows(r + 1, sorted);
 
-  // Summary rows under main list
   const summaryLabels = [
     ["Total No. of Students", subjects.map(() => a.totalStudents)],
     ["No. of Students Present", a.subjectStats.map((s) => s.appeared)],
@@ -529,7 +471,6 @@ export async function exportAnalysisSheet(
     r += 1;
   });
 
-  // Arrear group blocks
   const groups: [string, typeof a.results][] = [
     ["ALL CLEAR STUDENTS", sorted.filter((x) => x.arrears === 0)],
     ["ONE SUBJECTS ARREAR STUDENTS", sorted.filter((x) => x.arrears === 1)],
@@ -558,7 +499,6 @@ export async function exportAnalysisSheet(
     r = writeStudentRows(r + 1, list);
   });
 
-  // Download
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
