@@ -11,6 +11,11 @@ import {
 import { meta as seedMeta } from "@/data/seed";
 import { exportAnalysisSheet, type ExportMeta } from "@/lib/export-sheet";
 import { parseWorkbook } from "@/lib/parse-sheet";
+import {
+  ArrearPieChart,
+  PassFailChart,
+  SubjectPassChart,
+} from "@/components/result-charts";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -19,7 +24,7 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Professional internal assessment result analysis for exam cell — particulars, subject-wise performance, toppers and arrear groups.",
+          "Professional internal assessment result analysis for exam cell — diagrams, subject-wise performance, toppers and arrear groups.",
       },
     ],
   }),
@@ -35,17 +40,6 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "students", label: "Students" },
   { key: "toppers", label: "Toppers" },
 ];
-
-const CATEGORY_LABEL: Record<string, string> = {
-  "C-H-B": "Counselling · Hosteller · Boys",
-  "C-H-G": "Counselling · Hosteller · Girls",
-  "C-DS-B": "Counselling · Day Scholar · Boys",
-  "C-DS-G": "Counselling · Day Scholar · Girls",
-  "M-H-B": "Management · Hosteller · Boys",
-  "M-H-G": "Management · Hosteller · Girls",
-  "M-DS-B": "Management · Day Scholar · Boys",
-  "M-DS-G": "Management · Day Scholar · Girls",
-};
 
 function Portal() {
   const [students, setStudents] = useState<Student[]>([]);
@@ -67,6 +61,7 @@ function Portal() {
   const [exporting, setExporting] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const fileRef = useRef<HTMLInputElement>(null);
+  const nameListRef = useRef<HTMLInputElement>(null);
 
   const a = useMemo(
     () => analyse(students, subjects, passMark),
@@ -128,6 +123,82 @@ function Portal() {
     reader.readAsArrayBuffer(file);
   }
 
+  function mergeNameList(file: File) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const buf = e.target?.result;
+        if (!(buf instanceof ArrayBuffer)) throw new Error("Could not read file");
+        void import("xlsx").then((XLSX) => {
+          const wb = XLSX.read(buf, { type: "array" });
+          const sheet = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+            header: 1,
+            defval: "",
+            raw: true,
+          });
+          let regCol = -1;
+          let nameCol = -1;
+          let start = 0;
+          for (let i = 0; i < Math.min(15, rows.length); i++) {
+            const row = rows[i] as unknown[];
+            row.forEach((cell, col) => {
+              const h = String(cell ?? "").trim().toUpperCase();
+              if (/REG/.test(h) && /NO/.test(h)) regCol = col;
+              if (
+                h === "NAME" ||
+                h === "STUDENT'S NAME" ||
+                h === "STUDENTS NAME"
+              )
+                nameCol = col;
+            });
+            if (regCol >= 0 && nameCol >= 0) {
+              start = i + 1;
+              break;
+            }
+          }
+          if (regCol < 0 || nameCol < 0) {
+            regCol = 0;
+            nameCol = 1;
+            start = 0;
+          }
+          const map = new Map<string, string>();
+          for (const row of rows.slice(start)) {
+            const cells = row as unknown[];
+            const reg = String(cells[regCol] ?? "")
+              .trim()
+              .replace(/\.0$/, "");
+            const name = String(cells[nameCol] ?? "").trim();
+            if (/^\d{6,}$/.test(reg) && name) map.set(reg, name);
+          }
+          if (!map.size) {
+            setNotice("No names found in the name list");
+            return;
+          }
+          let updated = 0;
+          setStudents((prev) =>
+            prev.map((s) => {
+              const n = map.get(s.reg);
+              if (n && n !== s.name) {
+                updated += 1;
+                return { ...s, name: n };
+              }
+              return s;
+            }),
+          );
+          setNotice(
+            `Merged ${map.size} names from list · updated ${updated} students`,
+          );
+        });
+      } catch (err) {
+        setNotice(
+          err instanceof Error ? err.message : "Could not read name list",
+        );
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
   function clearData() {
     setStudents([]);
     setSubjects([]);
@@ -184,7 +255,9 @@ function Portal() {
               <input
                 className="mt-0.5 w-full rounded border border-input bg-background px-2 py-1 text-xs"
                 value={meta.department}
-                onChange={(e) => setMeta((m) => ({ ...m, department: e.target.value }))}
+                onChange={(e) =>
+                  setMeta((m) => ({ ...m, department: e.target.value }))
+                }
               />
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -201,7 +274,9 @@ function Portal() {
                 <input
                   className="mt-0.5 w-full rounded border border-input bg-background px-2 py-1 text-xs"
                   value={meta.semester}
-                  onChange={(e) => setMeta((m) => ({ ...m, semester: e.target.value }))}
+                  onChange={(e) =>
+                    setMeta((m) => ({ ...m, semester: e.target.value }))
+                  }
                 />
               </label>
               <label className="block">
@@ -217,7 +292,9 @@ function Portal() {
                 <input
                   className="mt-0.5 w-full rounded border border-input bg-background px-2 py-1 text-xs"
                   value={meta.section}
-                  onChange={(e) => setMeta((m) => ({ ...m, section: e.target.value }))}
+                  onChange={(e) =>
+                    setMeta((m) => ({ ...m, section: e.target.value }))
+                  }
                 />
               </label>
             </div>
@@ -352,6 +429,25 @@ function Portal() {
               <button className="btn-primary" onClick={() => fileRef.current?.click()}>
                 Upload mark sheet
               </button>
+              <input
+                ref={nameListRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) mergeNameList(f);
+                  e.target.value = "";
+                }}
+              />
+              <button
+                className="btn-outline"
+                disabled={students.length === 0}
+                onClick={() => nameListRef.current?.click()}
+                title="Optional: merge official names by register number"
+              >
+                Merge name list
+              </button>
               <button
                 className="btn-outline"
                 disabled={exporting || a.totalStudents === 0}
@@ -447,68 +543,61 @@ function Portal() {
               </section>
 
               {tab === "overview" && (
-                <div className="grid gap-6 lg:grid-cols-2">
-                  <Panel title="Pass percentage per subject">
-                    <div className="space-y-4">
-                      {a.subjectStats.map((s) => (
-                        <div key={s.subject.code}>
-                          <div className="flex items-baseline justify-between gap-3 text-sm">
-                            <span className="font-medium">
-                              <span className="font-mono text-xs text-accent">
-                                {s.subject.code}
-                              </span>{" "}
+                <>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <Panel title="Subject-wise pass diagram">
+                      <SubjectPassChart analysis={a} />
+                    </Panel>
+                    <Panel title="Arrear distribution diagram">
+                      <ArrearPieChart analysis={a} />
+                    </Panel>
+                  </div>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <Panel title="Pass vs fail overview">
+                      <PassFailChart analysis={a} />
+                    </Panel>
+                    <Panel title="Subject summary">
+                      <div className="space-y-3">
+                        {a.subjectStats.map((s) => (
+                          <div
+                            key={s.subject.code}
+                            className="flex items-center gap-3 text-sm"
+                          >
+                            <span className="w-16 shrink-0 font-mono text-xs text-accent">
+                              {s.subject.code}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate">
                               {s.subject.name}
                             </span>
                             <span className="font-mono text-xs text-muted-foreground">
                               {fmt(s.passPercent)}%
                             </span>
+                            <div className="h-2 w-24 overflow-hidden rounded-full bg-muted">
+                              <div
+                                className="h-full rounded-full bg-accent"
+                                style={{
+                                  width: `${Math.min(100, s.passPercent)}%`,
+                                }}
+                              />
+                            </div>
                           </div>
-                          <div className="mt-2 h-2 overflow-hidden rounded-full bg-muted">
-                            <div
-                              className="h-full rounded-full bg-accent transition-[width] duration-500"
-                              style={{ width: `${Math.min(100, s.passPercent)}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </Panel>
-                  <Panel title="Arrear distribution">
-                    <div className="space-y-3">
-                      {(
-                        [
-                          ["No arrears (all clear)", a.results.filter((r) => r.arrears === 0).length],
-                          ["Failed in 1 subject", a.results.filter((r) => r.arrears === 1).length],
-                          ["Failed in 2 subjects", a.results.filter((r) => r.arrears === 2).length],
-                          ["Failed in 3 & above", a.results.filter((r) => r.arrears >= 3).length],
-                        ] as const
-                      ).map(([label, count]) => (
-                        <div key={label} className="flex items-center gap-3">
-                          <span className="w-44 shrink-0 text-sm text-muted-foreground">{label}</span>
-                          <div className="h-6 flex-1 overflow-hidden rounded-md bg-muted">
-                            <div
-                              className="h-full bg-primary/80"
-                              style={{
-                                width: `${a.totalStudents ? (count / a.totalStudents) * 100 : 0}%`,
-                              }}
-                            />
-                          </div>
-                          <span className="w-8 text-right font-mono text-sm">{count}</span>
-                        </div>
-                      ))}
-                    </div>
-                    <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-4 text-sm">
-                      <div>
-                        <dt className="text-muted-foreground">Class average</dt>
-                        <dd className="font-display text-xl">{fmt(a.classAverage)}%</dd>
+                        ))}
                       </div>
-                      <div>
-                        <dt className="text-muted-foreground">Subjects</dt>
-                        <dd className="font-display text-xl">{subjects.length}</dd>
-                      </div>
-                    </dl>
-                  </Panel>
-                </div>
+                      <dl className="mt-6 grid grid-cols-2 gap-4 border-t border-border pt-4 text-sm">
+                        <div>
+                          <dt className="text-muted-foreground">Class average</dt>
+                          <dd className="font-display text-xl">
+                            {fmt(a.classAverage)}%
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted-foreground">Subjects</dt>
+                          <dd className="font-display text-xl">{subjects.length}</dd>
+                        </div>
+                      </dl>
+                    </Panel>
+                  </div>
+                </>
               )}
 
               {tab === "particulars" && (
@@ -529,7 +618,10 @@ function Portal() {
                       </thead>
                       <tbody>
                         {a.particulars.map((p, i) => (
-                          <tr key={p.label} className="border-b border-border/60 hover:bg-muted/50">
+                          <tr
+                            key={p.label}
+                            className="border-b border-border/60 hover:bg-muted/50"
+                          >
                             <Td>{i + 1}</Td>
                             <Td>{p.label}</Td>
                             <Td align="right" mono>
@@ -579,18 +671,35 @@ function Portal() {
                       </thead>
                       <tbody>
                         {a.subjectStats.map((s, i) => (
-                          <tr key={s.subject.code} className="border-b border-border/60 hover:bg-muted/50">
+                          <tr
+                            key={s.subject.code}
+                            className="border-b border-border/60 hover:bg-muted/50"
+                          >
                             <Td>{i + 1}</Td>
                             <Td mono>{s.subject.code}</Td>
                             <Td>{s.subject.name}</Td>
                             <Td>{s.subject.staff || "—"}</Td>
-                            <Td align="right" mono>{s.appeared}</Td>
-                            <Td align="right" mono>{s.absent}</Td>
-                            <Td align="right" mono>{s.passed}</Td>
-                            <Td align="right" mono>{s.failed}</Td>
-                            <Td align="right" mono>{fmt(s.passPercent)}</Td>
-                            <Td align="right" mono>{fmt(s.average)}</Td>
-                            <Td align="right" mono>{s.highest}</Td>
+                            <Td align="right" mono>
+                              {s.appeared}
+                            </Td>
+                            <Td align="right" mono>
+                              {s.absent}
+                            </Td>
+                            <Td align="right" mono>
+                              {s.passed}
+                            </Td>
+                            <Td align="right" mono>
+                              {s.failed}
+                            </Td>
+                            <Td align="right" mono>
+                              {fmt(s.passPercent)}
+                            </Td>
+                            <Td align="right" mono>
+                              {fmt(s.average)}
+                            </Td>
+                            <Td align="right" mono>
+                              {s.highest}
+                            </Td>
                           </tr>
                         ))}
                       </tbody>
@@ -647,8 +756,13 @@ function Portal() {
                       </thead>
                       <tbody>
                         {visibleResults.map((r) => (
-                          <tr key={r.student.reg} className="border-b border-border/60 hover:bg-muted/50">
-                            <Td align="right" mono>{r.rank}</Td>
+                          <tr
+                            key={r.student.reg}
+                            className="border-b border-border/60 hover:bg-muted/50"
+                          >
+                            <Td align="right" mono>
+                              {r.rank}
+                            </Td>
                             <Td mono>{r.student.reg}</Td>
                             <Td>{r.student.name}</Td>
                             {r.student.marks.map((m, i) => (
@@ -666,10 +780,18 @@ function Portal() {
                                 </span>
                               </Td>
                             ))}
-                            <Td align="right" mono>{r.total}</Td>
-                            <Td align="right" mono>{fmt(r.percent)}</Td>
-                            <Td align="right" mono>{r.arrears}</Td>
-                            <Td align="right" mono>{r.absents}</Td>
+                            <Td align="right" mono>
+                              {r.total}
+                            </Td>
+                            <Td align="right" mono>
+                              {fmt(r.percent)}
+                            </Td>
+                            <Td align="right" mono>
+                              {r.arrears}
+                            </Td>
+                            <Td align="right" mono>
+                              {r.absents}
+                            </Td>
                             <Td>
                               <span
                                 className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
@@ -702,11 +824,15 @@ function Portal() {
                         </span>
                         <div className="min-w-0">
                           <p className="truncate font-medium">{r.student.name}</p>
-                          <p className="font-mono text-xs text-muted-foreground">{r.student.reg}</p>
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {r.student.reg}
+                          </p>
                         </div>
                         <div className="ml-auto text-right">
                           <p className="font-display text-lg">{r.total}</p>
-                          <p className="font-mono text-xs text-muted-foreground">{fmt(r.percent, 2)}%</p>
+                          <p className="font-mono text-xs text-muted-foreground">
+                            {fmt(r.percent, 2)}%
+                          </p>
                         </div>
                       </li>
                     ))}
@@ -802,8 +928,7 @@ function Td({
 }) {
   return (
     <td
-      className={`px-3 py-2 ${align === "right" ? "text-right" : ""} ${
-        mono ? "font-mono text-xs" : ""
+      className={`px-3 py-2 ${align === "right" ? "text-right" : ""} ${\n        mono ? "font-mono text-xs" : ""
       }`}
     >
       {children}
