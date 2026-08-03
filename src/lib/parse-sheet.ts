@@ -22,7 +22,6 @@ function parseMark(v: unknown): Mark {
   return Number.isFinite(n) ? Math.round(n) : 0;
 }
 
-/** Subject code like CS3452, IT3401, GE3451, MA3354 */
 const CODE_RE = /([A-Z]{2,4}\d{3,4})/i;
 
 function parseMetaFromGrid(grid: unknown[][]): Partial<ExportMeta> {
@@ -65,7 +64,6 @@ function parseMetaFromGrid(grid: unknown[][]): Partial<ExportMeta> {
   return meta;
 }
 
-/** From FRONT subject-wise table: code → { name, staff } */
 function parseSubjectsFromFront(
   grid: unknown[][],
 ): Map<string, { name: string; staff: string }> {
@@ -75,16 +73,15 @@ function parseSubjectsFromFront(
   );
   if (subjIdx < 0) return map;
 
-  for (const row of grid.slice(subjIdx + 1, subjIdx + 30)) {
+  for (const row of grid.slice(subjIdx + 1, subjIdx + 40)) {
     const cells = row as unknown[];
     for (let c = 0; c < cells.length; c++) {
       const codeMatch = cellStr(cells[c]).match(/^([A-Z]{2,4}\d{3,4})$/i);
       if (!codeMatch) continue;
       const code = codeMatch[1].toUpperCase();
-      // Name is usually the next non-empty cell
       let name = "";
       let staff = "";
-      for (let k = c + 1; k < Math.min(c + 10, cells.length); k++) {
+      for (let k = c + 1; k < Math.min(c + 12, cells.length); k++) {
         const s = cellStr(cells[k]);
         if (!s) continue;
         if (
@@ -100,7 +97,9 @@ function parseSubjectsFromFront(
           break;
         }
       }
-      map.set(code, { name: name || code, staff });
+      if (!map.has(code)) {
+        map.set(code, { name: name || code, staff });
+      }
     }
   }
   return map;
@@ -121,28 +120,66 @@ function extractSubjectFromHeader(
   text: string,
 ): { code: string; name: string } | null {
   if (!text || isIdentityHeader(text)) return null;
-  // "CS3452 & Theory of Computation" or "CS3451& Introduction..." or "GE3451 Environmental..."
-  const m = text.match(
-    /^\s*([A-Z]{2,4}\d{3,4})\s*[&\-–:]?\s*(.*)$/i,
-  );
-  if (!m) {
-    // Code anywhere in the cell
-    const anywhere = text.match(/\b([A-Z]{2,4}\d{3,4})\b/i);
-    if (!anywhere) return null;
-    const code = anywhere[1].toUpperCase();
-    const name = text.replace(anywhere[0], "").replace(/^[&\-–:\s]+/, "").trim();
-    if (/^(total|pass|arrear|absent|status)$/i.test(name)) return null;
+
+  // Primary: starts with subject code
+  const m = text.match(/^\s*([A-Z]{2,4}\d{3,4})\s*[&\-–:]*\s*(.*)$/i);
+  if (m) {
+    const code = m[1].toUpperCase();
+    let name = (m[2] ?? "").trim().replace(/^[&\-–:]+\s*/, "");
+    if (/^(total|pass\s*%?|arrear.*|absent|status)$/i.test(name)) return null;
     return { code, name: name || code };
   }
-  const code = m[1].toUpperCase();
-  let name = (m[2] ?? "").trim().replace(/^[&\-–:]+\s*/, "");
-  if (/^(total|pass\s*%?|arrear.*|absent|status)$/i.test(name)) return null;
-  if (!name) name = code;
-  return { code, name };
+
+  // Fallback: code anywhere in cell
+  const anywhere = text.match(/\b([A-Z]{2,4}\d{3,4})\b/i);
+  if (!anywhere) return null;
+  const code = anywhere[1].toUpperCase();
+  const name = text
+    .replace(anywhere[0], "")
+    .replace(/^[&\-–:\s]+/, "")
+    .trim();
+  if (/^(total|pass|arrear|absent|status)$/i.test(name)) return null;
+  return { code, name: name || code };
+}
+
+function collectSubjectsFromRow(
+  header: unknown[],
+  skipCols: Set<number>,
+  frontSubjects: Map<string, { name: string; staff: string }>,
+): { col: number; subject: Subject }[] {
+  const subjectCols: { col: number; subject: Subject }[] = [];
+  const seenCodes = new Set<string>();
+
+  for (let col = 0; col < header.length; col++) {
+    if (skipCols.has(col)) continue;
+    const text = cellStr(header[col]);
+    if (!text) continue;
+    if (isIdentityHeader(text)) continue;
+
+    const extracted = extractSubjectFromHeader(text);
+    if (!extracted) continue;
+    if (seenCodes.has(extracted.code)) continue;
+    seenCodes.add(extracted.code);
+
+    const fromFront = frontSubjects.get(extracted.code);
+    subjectCols.push({
+      col,
+      subject: {
+        code: extracted.code,
+        name:
+          extracted.name !== extracted.code
+            ? extracted.name
+            : fromFront?.name || extracted.name,
+        staff: fromFront?.staff ?? "",
+      },
+    });
+  }
+
+  return subjectCols.sort((a, b) => a.col - b.col);
 }
 
 export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
-  const wb = XLSX.read(data, { type: "array", cellDates: true });
+  const wb = XLSX.read(data, { type: "array", cellDates: true, dense: false });
 
   const markName =
     wb.SheetNames.find((n) => /^mark$/i.test(n)) ??
@@ -152,11 +189,25 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
   const markSheet = markName ? wb.Sheets[markName] : undefined;
   if (!markSheet) throw new Error("No worksheet found in the file");
 
+  // Force full used range so trailing subject columns are not dropped
+  const ref = markSheet["!ref"] || "A1";
   const markGrid = XLSX.utils.sheet_to_json<unknown[]>(markSheet, {
     header: 1,
     defval: "",
     raw: true,
+    blankrows: false,
+    range: ref,
   });
+
+  // Normalize row lengths to the widest row
+  const maxWidth = markGrid.reduce(
+    (m, row) => Math.max(m, (row as unknown[]).length),
+    0,
+  );
+  for (const row of markGrid) {
+    const r = row as unknown[];
+    while (r.length < maxWidth) r.push("");
+  }
 
   const meta = parseMetaFromGrid(markGrid);
 
@@ -166,7 +217,7 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
     wb.SheetNames[0];
 
   let frontSubjects = new Map<string, { name: string; staff: string }>();
-  if (frontName && wb.Sheets[frontName]) {
+  if (frontName && wb.Sheets[frontName] && frontName !== markName) {
     const frontGrid = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[frontName], {
       header: 1,
       defval: "",
@@ -183,73 +234,104 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
     frontSubjects = parseSubjectsFromFront(frontGrid);
   }
 
-  // Find header row with REG. NO.
-  const headerIdx = markGrid.findIndex((row) =>
-    row.some((c) => typeof c === "string" && /reg\.?\s*no/i.test(String(c))),
-  );
-  if (headerIdx < 0) throw new Error("Could not find a REG. NO. header row");
+  // Find every REG. NO. header row and pick the one with the most subjects
+  // (main list has all subjects; arrear section headers may be shorter)
+  const candidateIdxs: number[] = [];
+  markGrid.forEach((row, i) => {
+    if (
+      row.some(
+        (c) => typeof c === "string" && /reg\.?\s*no/i.test(String(c)),
+      )
+    ) {
+      candidateIdxs.push(i);
+    }
+  });
+  if (!candidateIdxs.length) {
+    throw new Error("Could not find a REG. NO. header row");
+  }
 
-  const header = markGrid[headerIdx] as unknown[];
-  // Also check the row above for codes (some sheets split code / name)
-  const headerAbove =
-    headerIdx > 0 ? ((markGrid[headerIdx - 1] ?? []) as unknown[]) : [];
-
+  let headerIdx = candidateIdxs[0];
+  let subjectCols: { col: number; subject: Subject }[] = [];
   let colReg = 1;
   let colName = 2;
   let colGender = 3;
   let colQuota = 4;
   let colStay = 5;
 
-  header.forEach((cell, col) => {
-    const h = cellStr(cell).toUpperCase();
-    if (/REG/.test(h) && /NO/.test(h)) colReg = col;
-    if (/NAME/.test(h) && !/SUB/.test(h) && !CODE_RE.test(h)) colName = col;
-    if (/^B\s*\/?\s*G$/.test(h) || h === "B/G") colGender = col;
-    if (/^C\s*\/?\s*M$/.test(h) || h === "C/M" || h === "G/M") colQuota = col;
-    if (/^H\s*\/?\s*DS$/.test(h) || h === "H/DS") colStay = col;
-  });
+  for (const idx of candidateIdxs) {
+    const header = markGrid[idx] as unknown[];
 
-  // Collect subject columns — scan every header cell for a subject code
-  const subjectCols: { col: number; subject: Subject }[] = [];
-  const seenCodes = new Set<string>();
+    let cReg = 1;
+    let cName = 2;
+    let cGender = 3;
+    let cQuota = 4;
+    let cStay = 5;
 
-  const maxCol = Math.max(header.length, headerAbove.length, 20);
-  for (let col = 0; col < maxCol; col++) {
-    // Skip identity columns by index when we know them
-    if (
-      col === colReg ||
-      col === colName ||
-      col === colGender ||
-      col === colQuota ||
-      col === colStay
-    ) {
-      continue;
+    header.forEach((cell, col) => {
+      const h = cellStr(cell).toUpperCase();
+      if (/REG/.test(h) && /NO/.test(h)) cReg = col;
+      if (/NAME/.test(h) && !/SUB/.test(h) && !CODE_RE.test(h)) cName = col;
+      if (/^B\s*\/?\s*G$/.test(h) || h === "B/G") cGender = col;
+      if (/^C\s*\/?\s*M$/.test(h) || h === "C/M" || h === "G/M") cQuota = col;
+      if (/^H\s*\/?\s*DS$/.test(h) || h === "H/DS") cStay = col;
+    });
+
+    const skip = new Set([cReg, cName, cGender, cQuota, cStay]);
+    // Also skip E/T if present
+    header.forEach((cell, col) => {
+      if (/^E\s*\/?\s*T$/.test(cellStr(cell).toUpperCase())) skip.add(col);
+    });
+
+    const found = collectSubjectsFromRow(header, skip, frontSubjects);
+
+    // Fallback: columns after H/DS / E/T until TOTAL that have mark-like data
+    if (found.length < 3) {
+      let startCol = Math.max(cStay + 1, cGender + 1, cQuota + 1, cName + 1);
+      // skip E/T
+      if (/^E\s*\/?\s*T$/i.test(cellStr(header[startCol]))) startCol += 1;
+
+      for (let col = startCol; col < header.length; col++) {
+        const text = cellStr(header[col]);
+        if (!text) continue;
+        if (/^(total|pass|arrear)/i.test(text)) break;
+        if (isIdentityHeader(text)) continue;
+        const extracted = extractSubjectFromHeader(text);
+        if (extracted && !found.some((f) => f.subject.code === extracted.code)) {
+          const fromFront = frontSubjects.get(extracted.code);
+          found.push({
+            col,
+            subject: {
+              code: extracted.code,
+              name:
+                extracted.name !== extracted.code
+                  ? extracted.name
+                  : fromFront?.name || extracted.name,
+              staff: fromFront?.staff ?? "",
+            },
+          });
+        }
+      }
+      found.sort((a, b) => a.col - b.col);
     }
 
-    const text = cellStr(header[col]) || cellStr(headerAbove[col]);
-    if (!text) continue;
-    if (isIdentityHeader(text)) continue;
-
-    const extracted = extractSubjectFromHeader(text);
-    if (!extracted) continue;
-    if (seenCodes.has(extracted.code)) continue;
-    seenCodes.add(extracted.code);
-
-    const fromFront = frontSubjects.get(extracted.code);
-    subjectCols.push({
-      col,
-      subject: {
-        code: extracted.code,
-        name: extracted.name !== extracted.code
-          ? extracted.name
-          : fromFront?.name || extracted.name,
-        staff: fromFront?.staff ?? "",
-      },
-    });
+    if (found.length > subjectCols.length) {
+      subjectCols = found;
+      headerIdx = idx;
+      colReg = cReg;
+      colName = cName;
+      colGender = cGender;
+      colQuota = cQuota;
+      colStay = cStay;
+    }
   }
 
-  // Sort by column order
-  subjectCols.sort((a, b) => a.col - b.col);
+  // If MARK still has few subjects, append any FRONT subjects as metadata only
+  // (cannot invent mark columns without positions)
+  if (subjectCols.length === 0 && frontSubjects.size > 0) {
+    throw new Error(
+      "Found subjects on FRONT sheet but no mark columns on MARK. Check the mark header row.",
+    );
+  }
 
   if (!subjectCols.length) {
     throw new Error(
