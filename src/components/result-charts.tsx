@@ -31,6 +31,14 @@ export function SubjectPassChart({ analysis }: { analysis: Analysis }) {
     fail: Math.max(0, Number(fmt(100 - s.passPercent, 1))),
   }));
 
+  if (!data.length) {
+    return (
+      <p className="py-10 text-center text-sm text-muted-foreground">
+        No subject data to chart
+      </p>
+    );
+  }
+
   return (
     <div className="h-72 w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -132,6 +140,12 @@ export function PassFailChart({ analysis }: { analysis: Analysis }) {
     { name: "Passed all", value: analysis.passedAll, fill: COLORS.good },
     { name: "Failed", value: analysis.failed, fill: COLORS.bad },
   ];
+
+  if (analysis.totalStudents === 0) {
+    return (
+      <p className="py-10 text-center text-sm text-muted-foreground">No data</p>
+    );
+  }
 
   return (
     <div className="h-56 w-full">
