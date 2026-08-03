@@ -50,7 +50,15 @@ const CATEGORY_LABEL: Record<string, string> = {
 function Portal() {
   const [students, setStudents] = useState<Student[]>(seedStudents);
   const [subjects, setSubjects] = useState<Subject[]>(seedSubjects);
-  const [meta, setMeta] = useState<ExportMeta>({ ...seedMeta });
+  const [meta, setMeta] = useState<ExportMeta>({
+    institution: seedMeta.institution,
+    department: seedMeta.department,
+    title: seedMeta.title,
+    year: seedMeta.year,
+    semester: seedMeta.semester,
+    batch: seedMeta.batch,
+    section: seedMeta.section,
+  });
   const [passMark, setPassMark] = useState(seedMeta.passMark);
   const [tab, setTab] = useState<TabKey>("overview");
   const [query, setQuery] = useState("");
@@ -123,7 +131,7 @@ function Portal() {
     try {
       setExporting(true);
       setNotice(null);
-      await exportAnalysisSheet(a, subjects, meta);
+      await exportAnalysisSheet(a, subjects, meta, passMark);
       setNotice("Analysis Excel downloaded — ready for exam cell");
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Export failed");
@@ -152,12 +160,57 @@ function Portal() {
             </p>
           </div>
 
-          <div className="border-b border-border px-5 py-4 space-y-2 text-xs">
-            <MetaLine label="Assessment" value={meta.title} />
-            <MetaLine label="Year" value={meta.year} />
-            <MetaLine label="Semester" value={meta.semester} />
-            <MetaLine label="Batch" value={meta.batch} />
-            <MetaLine label="Section" value={meta.section} />
+          <div className="border-b border-border px-5 py-4 space-y-2.5 text-xs">
+            <label className="block">
+              <span className="text-muted-foreground">Assessment</span>
+              <input
+                className="mt-0.5 w-full rounded border border-input bg-background px-2 py-1 text-xs"
+                value={meta.title}
+                onChange={(e) => setMeta((m) => ({ ...m, title: e.target.value }))}
+              />
+            </label>
+            <label className="block">
+              <span className="text-muted-foreground">Department</span>
+              <input
+                className="mt-0.5 w-full rounded border border-input bg-background px-2 py-1 text-xs"
+                value={meta.department}
+                onChange={(e) => setMeta((m) => ({ ...m, department: e.target.value }))}
+              />
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="text-muted-foreground">Year</span>
+                <input
+                  className="mt-0.5 w-full rounded border border-input bg-background px-2 py-1 text-xs"
+                  value={meta.year}
+                  onChange={(e) => setMeta((m) => ({ ...m, year: e.target.value }))}
+                />
+              </label>
+              <label className="block">
+                <span className="text-muted-foreground">Semester</span>
+                <input
+                  className="mt-0.5 w-full rounded border border-input bg-background px-2 py-1 text-xs"
+                  value={meta.semester}
+                  onChange={(e) => setMeta((m) => ({ ...m, semester: e.target.value }))}
+                />
+              </label>
+              <label className="block">
+                <span className="text-muted-foreground">Batch</span>
+                <input
+                  className="mt-0.5 w-full rounded border border-input bg-background px-2 py-1 text-xs"
+                  value={meta.batch}
+                  onChange={(e) => setMeta((m) => ({ ...m, batch: e.target.value }))}
+                />
+              </label>
+              <label className="block">
+                <span className="text-muted-foreground">Section</span>
+                <input
+                  className="mt-0.5 w-full rounded border border-input bg-background px-2 py-1 text-xs"
+                  value={meta.section}
+                  onChange={(e) => setMeta((m) => ({ ...m, section: e.target.value }))}
+                />
+              </label>
+            </div>
             <div className="flex items-center justify-between pt-1">
               <span className="text-muted-foreground">Pass mark</span>
               <input
@@ -667,15 +720,6 @@ function Portal() {
           Prepared by · HOD · Vice Principal · Principal
         </footer>
       </div>
-    </div>
-  );
-}
-
-function MetaLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-3">
-      <span className="shrink-0 text-muted-foreground">{label}</span>
-      <span className="text-right font-medium leading-snug">{value || "—"}</span>
     </div>
   );
 }
