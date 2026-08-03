@@ -302,12 +302,13 @@ export async function exportAnalysisSheet(
   });
 
   row += 4;
-  const sig = front.getRow(row);
-  sig.height = 22;
-  setCell(sig, 2, "PREPARED BY", { bold: true, center: true });
-  setCell(sig, 5, "HOD", { bold: true, center: true });
-  setCell(sig, 10, "VICE PRINCIPAL", { bold: true, center: true });
-  setCell(sig, 14, "PRINCIPAL", { bold: true, center: true });
+  // Developer credit (replaces institutional PREPARED BY / HOD / VICE PRINCIPAL / PRINCIPAL)
+  front.mergeCells(row, 1, row, 16);
+  const credit = front.getCell(row, 1);
+  credit.value = "Developed by Sairam BN  ·  https://github.com/sairambn/aiml-stats-portal  ·  https://bnsairam.vercel.app/";
+  credit.font = { name: "Calibri", size: 10, bold: true };
+  credit.alignment = { horizontal: "center", vertical: "middle" };
+  front.getRow(row).height = 22;
 
   row += 2;
   front.mergeCells(row, 1, row, 16);
