@@ -26,25 +26,34 @@ function parseMetaFromGrid(grid: unknown[][]): Partial<ExportMeta> {
   const meta: Partial<ExportMeta> = {};
   if (!grid.length) return meta;
 
-  const r0 = cellStr(grid[0]?.[0]);
-  if (r0) meta.institution = r0;
+  // Scan top rows by content (first row is often empty in these sheets)
+  for (let i = 0; i < Math.min(10, grid.length); i++) {
+    const row = (grid[i] ?? []) as unknown[];
+    const first = cellStr(row[0]);
 
-  const r1 = cellStr(grid[1]?.[0]);
-  if (r1 && /department/i.test(r1)) meta.department = r1;
+    if (!meta.institution && first && /nagar|chennai|college|institute|university|road|salai/i.test(first)) {
+      meta.institution = first;
+    }
+    if (!meta.department && first && /department/i.test(first)) {
+      meta.department = first;
+    }
+    if (
+      !meta.title &&
+      first &&
+      /assessment|result\s*analysis|internal/i.test(first) &&
+      !/department/i.test(first)
+    ) {
+      meta.title = first;
+    }
 
-  const r2 = cellStr(grid[2]?.[0]);
-  if (r2 && /assessment|result|analysis/i.test(r2)) meta.title = r2;
-
-  // Scan first 8 rows for YEAR / SEMESTER / BATCH / SECTION
-  for (let i = 0; i < Math.min(8, grid.length); i++) {
-    const row = grid[i] as unknown[];
-    for (let c = 0; c < (row?.length ?? 0); c++) {
+    for (let c = 0; c < row.length; c++) {
       const label = cellStr(row[c]).toUpperCase().replace(/\s+/g, " ");
       const next = cellStr(row[c + 1]);
-      if (label.startsWith("YEAR") && next) meta.year = next;
-      if (label.startsWith("SEMESTER") && next) meta.semester = next;
-      if (label.startsWith("BATCH") && next && /\d{4}/.test(next)) meta.batch = next;
-      if (label.startsWith("SECTION") && next) meta.section = next;
+      if (!next) continue;
+      if (label.startsWith("YEAR") && !meta.year) meta.year = next;
+      if (label.startsWith("SEMESTER") && !meta.semester) meta.semester = next;
+      if (label.startsWith("BATCH") && /\d{4}/.test(next)) meta.batch = next;
+      if (label.startsWith("SECTION") && !meta.section) meta.section = next;
     }
   }
   return meta;
@@ -53,21 +62,21 @@ function parseMetaFromGrid(grid: unknown[][]): Partial<ExportMeta> {
 function parseStaffFromFront(grid: unknown[][]): Record<string, string> {
   const staffMap: Record<string, string> = {};
   const subjIdx = grid.findIndex((row) =>
-    row.some((c) => typeof c === "string" && /subject\s*wise/i.test(c)),
+    row.some((c) => typeof c === "string" && /subject\s*wise/i.test(String(c))),
   );
   if (subjIdx < 0) return staffMap;
 
-  for (const row of grid.slice(subjIdx + 1, subjIdx + 20)) {
+  for (const row of grid.slice(subjIdx + 1, subjIdx + 25)) {
     const cells = row as unknown[];
-    // Find a subject code like CS3452 in the row
     for (let c = 0; c < cells.length; c++) {
-      const code = cellStr(cells[c]).match(/^([A-Z]{2}\d{4})$/);
-      if (!code) continue;
-      // Staff is usually a few columns after subject name
-      for (let k = c + 1; k < Math.min(c + 6, cells.length); k++) {
+      const codeMatch = cellStr(cells[c]).match(/^([A-Z]{2}\d{4})$/i);
+      if (!codeMatch) continue;
+      const code = codeMatch[1].toUpperCase();
+      for (let k = c + 1; k < Math.min(c + 8, cells.length); k++) {
         const s = cellStr(cells[k]);
-        if (/\b(AP|PROF|DR\.|MR\.|MS\.|MRS\.)/i.test(s) || /\//.test(s)) {
-          staffMap[code[1]] = s;
+        if (!s) continue;
+        if (/\b(AP|PROF|DR\.?|MR\.?|MS\.?|MRS\.?)\b/i.test(s) || /\//.test(s)) {
+          staffMap[code] = s;
           break;
         }
       }
@@ -77,36 +86,48 @@ function parseStaffFromFront(grid: unknown[][]): Record<string, string> {
 }
 
 export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
-  const wb = XLSX.read(data, { type: "array" });
+  const wb = XLSX.read(data, { type: "array", cellDates: true });
 
-  const markSheet =
-    wb.Sheets["MARK"] ??
-    wb.Sheets[wb.SheetNames.find((n) => /mark/i.test(n)) ?? ""] ??
-    wb.Sheets[wb.SheetNames[wb.SheetNames.length - 1] ?? ""];
+  const markName =
+    wb.SheetNames.find((n) => /^mark$/i.test(n)) ??
+    wb.SheetNames.find((n) => /mark/i.test(n)) ??
+    wb.SheetNames[wb.SheetNames.length - 1];
 
+  const markSheet = markName ? wb.Sheets[markName] : undefined;
   if (!markSheet) throw new Error("No worksheet found in the file");
 
   const markGrid = XLSX.utils.sheet_to_json<unknown[]>(markSheet, {
     header: 1,
     defval: "",
+    raw: true,
   });
 
   const meta = parseMetaFromGrid(markGrid);
 
-  // FRONT sheet for department title and staff names
-  const frontSheet = wb.Sheets["FRONT"] ?? wb.Sheets[wb.SheetNames[0] ?? ""];
+  const frontName =
+    wb.SheetNames.find((n) => /^front$/i.test(n)) ??
+    wb.SheetNames.find((n) => /front/i.test(n)) ??
+    wb.SheetNames[0];
+
   let staffMap: Record<string, string> = {};
-  if (frontSheet) {
-    const frontGrid = XLSX.utils.sheet_to_json<unknown[]>(frontSheet, {
+  if (frontName && wb.Sheets[frontName]) {
+    const frontGrid = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[frontName], {
       header: 1,
       defval: "",
+      raw: true,
     });
     const frontMeta = parseMetaFromGrid(frontGrid);
-    Object.assign(meta, frontMeta);
+    // Prefer FRONT for title/department (more complete analysis header)
+    if (frontMeta.institution) meta.institution = frontMeta.institution;
+    if (frontMeta.department) meta.department = frontMeta.department;
+    if (frontMeta.title) meta.title = frontMeta.title;
+    if (frontMeta.year) meta.year = frontMeta.year;
+    if (frontMeta.semester) meta.semester = frontMeta.semester;
+    if (frontMeta.batch) meta.batch = frontMeta.batch;
+    if (frontMeta.section) meta.section = frontMeta.section;
     staffMap = parseStaffFromFront(frontGrid);
   }
 
-  // Find the first header row with REG. NO.
   const headerIdx = markGrid.findIndex((row) =>
     row.some((c) => typeof c === "string" && /reg\.?\s*no/i.test(String(c))),
   );
@@ -114,7 +135,6 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
 
   const header = markGrid[headerIdx] as unknown[];
 
-  // Map column indices for identity fields
   let colReg = 1;
   let colName = 2;
   let colGender = 3;
@@ -125,24 +145,24 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
     const h = cellStr(cell).toUpperCase();
     if (/REG/.test(h) && /NO/.test(h)) colReg = col;
     if (/NAME/.test(h) && !/SUB/.test(h)) colName = col;
-    if (/^B\/?G$/.test(h) || h === "B/G") colGender = col;
-    if (/^C\/?M$/.test(h) || h === "C/M" || h === "G/M") colQuota = col;
-    if (/^H\/?DS$/.test(h) || h === "H/DS") colStay = col;
+    if (/^B\s*\/?\s*G$/.test(h) || h === "B/G") colGender = col;
+    if (/^C\s*\/?\s*M$/.test(h) || h === "C/M" || h === "G/M") colQuota = col;
+    if (/^H\s*\/?\s*DS$/.test(h) || h === "H/DS") colStay = col;
   });
 
-  // Subject columns: code pattern CS3452 or CS3452 & Name or CS3451& Name
   const subjectCols: { col: number; subject: Subject }[] = [];
   header.forEach((cell, col) => {
-    if (typeof cell !== "string") return;
     if (col <= colStay) return;
-    const m = cell.match(/^\s*([A-Z]{2}\d{4})\s*&?\s*(.*)$/i);
+    const text = cellStr(cell);
+    if (!text) return;
+    const m = text.match(/^\s*([A-Z]{2}\d{4})\s*&?\s*(.*)$/i);
     if (!m) return;
     const code = m[1].toUpperCase();
-    const name = (m[2] ?? "").trim() || code;
-    // Skip TOTAL / PASS / ARREAR columns
-    if (/total|pass|arrear|absent|status/i.test(name) && !/theory|system|machine|web|operating|environ/i.test(name)) {
-      return;
-    }
+    let name = (m[2] ?? "").trim();
+    // Guard: don't treat TOTAL / PASS % as subjects
+    if (!name && /total|pass|arrear/i.test(text)) return;
+    if (/^(total|pass\s*%?|arrear.*|absent|status)$/i.test(name)) return;
+    if (!name) name = code;
     subjectCols.push({
       col,
       subject: {
@@ -153,7 +173,9 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
     });
   });
 
-  if (!subjectCols.length) throw new Error("No subject columns found in the mark sheet");
+  if (!subjectCols.length) {
+    throw new Error("No subject columns found in the mark sheet");
+  }
 
   const parsed: Student[] = [];
   const seen = new Set<string>();
@@ -161,7 +183,7 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
   for (const row of markGrid.slice(headerIdx + 1)) {
     const cells = row as unknown[];
     const first = cellStr(cells[0]).toUpperCase();
-    // Stop at summary / section headers of the mark sheet
+
     if (
       /total\s*no/i.test(first) ||
       /no\.?\s*of\s*students/i.test(first) ||
@@ -169,8 +191,8 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
       /one\s*subject/i.test(first) ||
       /two\s*subject/i.test(first) ||
       /three/i.test(first) ||
-      /arrear/i.test(first) ||
-      /pass%/i.test(first) ||
+      /^arrear/i.test(first) ||
+      /^pass%/i.test(first) ||
       /jeppiaar/i.test(first) ||
       /department/i.test(first) ||
       /assessment/i.test(first)
@@ -178,7 +200,8 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
       break;
     }
 
-    const reg = cellStr(cells[colReg]);
+    // Reg can be number or string from Excel
+    const reg = cellStr(cells[colReg]).replace(/\.0$/, "");
     if (!/^\d{6,}$/.test(reg)) continue;
     if (seen.has(reg)) continue;
     seen.add(reg);
