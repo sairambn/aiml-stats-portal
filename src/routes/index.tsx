@@ -62,6 +62,7 @@ function Portal() {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "pass" | "fail" | "absent">("all");
   const [notice, setNotice] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const a = useMemo(() => analyse(students, subjects, passMark), [students, subjects, passMark]);
@@ -112,8 +113,17 @@ function Portal() {
     reader.readAsArrayBuffer(file);
   }
 
-  function exportSheet() {
-    exportAnalysisSheet(a, subjects, meta);
+  async function exportSheet() {
+    try {
+      setExporting(true);
+      setNotice(null);
+      await exportAnalysisSheet(a, subjects, meta);
+      setNotice("Analysis Excel downloaded with full borders and formatting");
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
@@ -146,8 +156,12 @@ function Portal() {
             <button className="btn-primary" onClick={() => fileRef.current?.click()}>
               Upload mark sheet
             </button>
-            <button className="btn-outline" onClick={exportSheet}>
-              Export analysis (.xlsx)
+            <button
+              className="btn-outline"
+              disabled={exporting || a.totalStudents === 0}
+              onClick={() => void exportSheet()}
+            >
+              {exporting ? "Preparing Excel…" : "Export analysis (.xlsx)"}
             </button>
             <button className="btn-ghost" onClick={() => window.print()}>
               Print report
