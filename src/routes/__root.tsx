@@ -93,15 +93,16 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
-      // Suppress default Lovable favicon with empty transparent SVG icon
+      // Empty transparent favicon — removes Lovable default heart icon
+      {
+        rel: "icon",
+        type: "image/svg+xml",
+        href: "/favicon.svg",
+      },
       {
         rel: "icon",
         href: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3C/svg%3E",
         type: "image/svg+xml",
-      },
-      {
-        rel: "icon",
-        href: "data:,",
       },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
