@@ -10,12 +10,22 @@ export type ParsedSheet = {
 
 function cellStr(v: unknown): string {
   if (v === undefined || v === null) return "";
+  // Dates come through as Date objects when cellDates:true
+  if (v instanceof Date) {
+    const d = v.getDate().toString().padStart(2, "0");
+    const m = (v.getMonth() + 1).toString().padStart(2, "0");
+    const y = v.getFullYear().toString().slice(-2);
+    return `${d}/${m}/${y}`;
+  }
   return String(v).trim();
 }
 
 function parseMark(v: unknown): Mark {
   if (v === undefined || v === null || v === "") return null;
-  if (typeof v === "number") return Math.round(v);
+  if (typeof v === "number") {
+    // Keep one decimal if present (e.g. 68.333 → 68)
+    return Math.round(v);
+  }
   const s = String(v).trim();
   // AB = absent, OD = on duty, NA = not applicable
   if (/^(ab|od|na|n\/?a|-)$/i.test(s)) return "AB";
@@ -25,7 +35,7 @@ function parseMark(v: unknown): Mark {
 
 const CODE_RE = /([A-Z]{2,4}\d{3,4})/i;
 
-/** Common short forms → full subject names */
+/** Common short forms → full subject names (AIML / CSE / etc.) */
 const SHORT_NAMES: Record<string, string> = {
   TOC: "Theory of Computation",
   OS: "Operating Systems",
@@ -37,6 +47,23 @@ const SHORT_NAMES: Record<string, string> = {
   EVS: "Environmental Sciences and Sustainability",
   WE: "Web Essentials",
   AIML: "Artificial Intelligence and Machine Learning",
+  // RA / IAT short codes seen in AIML mark sheets
+  DM: "Discrete Mathematics",
+  OOSE: "Object Oriented Software Engineering",
+  DS: "Data Structures",
+  JP: "Java Programming",
+  NLP: "Natural Language Processing",
+  DL: "Deep Learning",
+  DC: "Data Communication",
+  CCS: "Cloud Computing Systems",
+  CC: "Cloud Computing",
+  STA: "Statistics and Data Analytics",
+  CNS: "Cryptography and Network Security",
+  SE: "Software Engineering",
+  CN: "Computer Networks",
+  DAA: "Design and Analysis of Algorithms",
+  PYTHON: "Python Programming",
+  R: "R Programming",
 };
 
 function parseMetaFromGrid(grid: unknown[][]): Partial<ExportMeta> {
@@ -150,6 +177,19 @@ function isIdentityHeader(h: string): boolean {
   );
 }
 
+function isDateLikeHeader(text: string): boolean {
+  // 30/07/26, 29.07.26, 2026-03-08, Date objects already stringified
+  return (
+    /^\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}$/.test(text) ||
+    /^\d{4}-\d{2}-\d{2}/.test(text)
+  );
+}
+
+function isShortSubjectCode(text: string): boolean {
+  // 2–6 uppercase letters (DM, OS, OOSE, NLP, CCS …)
+  return /^[A-Z]{2,6}$/i.test(text.trim());
+}
+
 function extractSubjectFromHeader(
   text: string,
 ): { code: string; name: string } | null {
@@ -187,10 +227,9 @@ function resolveSubjectName(
   const fromInfo = info.get(code)?.name;
   if (fromInfo && fromInfo.length > 3) return fromInfo;
 
-  const short = extractedName.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const short = (extractedName || code).toUpperCase().replace(/[^A-Z0-9]/g, "");
   if (SHORT_NAMES[short]) return SHORT_NAMES[short];
-  if (SHORT_NAMES[extractedName.toUpperCase()])
-    return SHORT_NAMES[extractedName.toUpperCase()];
+  if (SHORT_NAMES[code.toUpperCase()]) return SHORT_NAMES[code.toUpperCase()];
 
   if (extractedName && extractedName !== code && extractedName.length > 3) {
     return extractedName;
@@ -244,6 +283,71 @@ function collectSubjectsFromRow(
   }
 
   return subjectCols.sort((a, b) => a.col - b.col);
+}
+
+/**
+ * Handle the common AIML / RA format:
+ *   Row N   : S.No | Register No. | Name | 30/07/26 | 31/07/26 | …
+ *   Row N+1 : (empty)              | DM      | OS      | …
+ */
+function collectSubjectsFromDateAndCodeRows(
+  dateRow: unknown[],
+  codeRow: unknown[],
+  skipCols: Set<number>,
+  codeInfo: Map<string, { name: string; staff: string }>,
+): { col: number; subject: Subject }[] {
+  const subjectCols: { col: number; subject: Subject }[] = [];
+  const seenCodes = new Set<string>();
+
+  const maxCol = Math.max(dateRow.length, codeRow.length);
+  for (let col = 0; col < maxCol; col++) {
+    if (skipCols.has(col)) continue;
+
+    const dateText = cellStr(dateRow[col]);
+    const codeText = cellStr(codeRow[col]);
+
+    // Prefer short code from the second row
+    let code = "";
+    let nameHint = "";
+
+    if (codeText && isShortSubjectCode(codeText)) {
+      code = codeText.toUpperCase();
+      nameHint = code;
+    } else if (dateText && isShortSubjectCode(dateText)) {
+      // Fallback: short code sitting on the first header row
+      code = dateText.toUpperCase();
+      nameHint = code;
+    } else if (dateText && isDateLikeHeader(dateText) && codeText) {
+      // Date above + something below – treat below as code if plausible
+      if (/^[A-Z0-9]{2,8}$/i.test(codeText)) {
+        code = codeText.toUpperCase();
+        nameHint = code;
+      }
+    }
+
+    if (!code) continue;
+    if (seenCodes.has(code)) continue;
+    seenCodes.add(code);
+
+    const info = codeInfo.get(code);
+    subjectCols.push({
+      col,
+      subject: {
+        code,
+        name: resolveSubjectName(code, nameHint, codeInfo),
+        staff: info?.staff ?? "",
+      },
+    });
+  }
+
+  return subjectCols.sort((a, b) => a.col - b.col);
+}
+
+function isStudentReg(reg: string): boolean {
+  // Pure numeric (12+ digits) or alphanumeric like 25JELAIML402
+  if (/^\d{6,}$/.test(reg)) return true;
+  if (/^[0-9A-Z]{8,}$/i.test(reg) && /\d/.test(reg)) return true;
+  return false;
 }
 
 export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
@@ -328,6 +432,7 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
   let colGender = -1;
   let colQuota = -1;
   let colStay = -1;
+  let dataStartOffset = 1; // how many rows after headerIdx to start reading students
 
   for (const idx of candidateIdxs) {
     const header = markGrid[idx] as unknown[];
@@ -342,7 +447,7 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
       const h = cellStr(cell).toUpperCase().replace(/\s+/g, "");
       if (/REG/.test(h) && /NO/.test(h)) cReg = col;
       if (
-        (h === "NAME" || h === "STUDENT'SNAME" || h === "STUDENTSNAME") &&
+        (h === "NAME" || h === "STUDENT'SNAME" || h === "STUDENTSNAME" || h === "NAMEOFTHESTUDENT") &&
         !CODE_RE.test(h)
       ) {
         cName = col;
@@ -373,12 +478,52 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
       Math.max(cReg, cName, cGender, cQuota, cStay, 0) + 1,
     );
 
-    const found = collectSubjectsFromRow(
+    // 1) Standard single-row subject headers (CS3452, CS3452(TOC), …)
+    let found = collectSubjectsFromRow(
       header,
       skip,
       codeInfo,
       legendStart,
     );
+
+    // 2) Two-row format: dates on this row, short codes on the next
+    if (found.length === 0 && idx + 1 < markGrid.length) {
+      const nextRow = markGrid[idx + 1] as unknown[];
+      const fromDateCode = collectSubjectsFromDateAndCodeRows(
+        header,
+        nextRow,
+        skip,
+        codeInfo,
+      );
+      if (fromDateCode.length > 0) {
+        found = fromDateCode;
+        // Students start after the code row
+        dataStartOffset = 2;
+      }
+    }
+
+    // 3) Short codes already on the header row itself
+    if (found.length === 0) {
+      const shortOnly: { col: number; subject: Subject }[] = [];
+      const seen = new Set<string>();
+      for (let col = 0; col < header.length; col++) {
+        if (skip.has(col)) continue;
+        const t = cellStr(header[col]);
+        if (!isShortSubjectCode(t)) continue;
+        const code = t.toUpperCase();
+        if (seen.has(code)) continue;
+        seen.add(code);
+        shortOnly.push({
+          col,
+          subject: {
+            code,
+            name: resolveSubjectName(code, code, codeInfo),
+            staff: codeInfo.get(code)?.staff ?? "",
+          },
+        });
+      }
+      if (shortOnly.length > 0) found = shortOnly;
+    }
 
     if (found.length > subjectCols.length) {
       subjectCols = found;
@@ -393,23 +538,29 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
 
   if (!subjectCols.length) {
     throw new Error(
-      "No subject columns found. Header must include codes like CS3452, AL3452, GE3451.",
+      "No subject columns found. Expected codes like CS3452 / DM / OS / NLP, or date + short-code rows.",
     );
   }
 
   const parsed: Student[] = [];
   const seen = new Set<string>();
 
-  for (const row of markGrid.slice(headerIdx + 1)) {
+  for (const row of markGrid.slice(headerIdx + dataStartOffset)) {
     const cells = row as unknown[];
     const first = cellStr(cells[0]).toUpperCase();
+    const second = cellStr(cells[1]).toUpperCase();
 
     if (
       /total\s*no/i.test(first) ||
+      /total\s*no/i.test(second) ||
       /no\.?\s*of\s*students/i.test(first) ||
+      /no\.?\s*of\s*students/i.test(second) ||
       /no\.?\s*of\s*pass/i.test(first) ||
+      /no\.?\s*of\s*pass/i.test(second) ||
       /no\.?\s*of\s*fail/i.test(first) ||
+      /no\.?\s*of\s*fail/i.test(second) ||
       /percentage/i.test(first) ||
+      /percentage/i.test(second) ||
       /all\s*clear/i.test(first) ||
       /one\s*subject/i.test(first) ||
       /two\s*subject/i.test(first) ||
@@ -418,13 +569,15 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
       /^pass%/i.test(first) ||
       /jeppiaar/i.test(first) ||
       /department/i.test(first) ||
-      /assessment/i.test(first)
+      /assessment/i.test(first) ||
+      /hostel/i.test(first) ||
+      /hostel/i.test(second)
     ) {
       break;
     }
 
     const reg = cellStr(cells[colReg]).replace(/\.0$/, "");
-    if (!/^\d{6,}$/.test(reg)) continue;
+    if (!isStudentReg(reg)) continue;
     if (seen.has(reg)) continue;
     seen.add(reg);
 
