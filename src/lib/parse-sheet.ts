@@ -20,12 +20,19 @@ function cellStr(v: unknown): string {
 }
 
 function parseMark(v: unknown): Mark {
-  if (v === undefined || v === null || v === "") return null;
-  if (typeof v === "number") return Math.round(v);
+  // Empty / blank cells are treated as absent (exam-cell convention)
+  if (v === undefined || v === null || v === "") return "AB";
+  if (typeof v === "number") {
+    if (Number.isNaN(v)) return "AB";
+    return Math.round(v);
+  }
   const s = String(v).trim();
+  if (!s) return "AB";
+  // AB = absent, OD = on duty, NA = not applicable
   if (/^(ab|od|na|n\/?a|-)$/i.test(s)) return "AB";
   const n = Number(s);
-  return Number.isFinite(n) ? Math.round(n) : 0;
+  if (!Number.isFinite(n)) return "AB";
+  return Math.round(n);
 }
 
 const CODE_RE = /([A-Z]{2,4}\d{3,4})/i;
