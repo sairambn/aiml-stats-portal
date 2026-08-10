@@ -28,19 +28,18 @@ No student data is stored on the server. Everything runs in the browser session.
 1. Open the [live portal](https://aiml-stats-portal.vercel.app) **or** run locally.
 2. Upload a mark sheet (`.xlsx`) — or click **Load demo data** to try instantly.
 3. Review Overview diagrams, Subjects, Students, Toppers.
-4. Optionally **Merge name list** (Reg.No + Name) for official spellings.
-5. Adjust pass mark in the sidebar if needed (default **50**).
-6. **Export analysis** → exam-cell Excel with borders, AB (yellow), fails (red).
+4. Adjust pass mark in the sidebar if needed (default **50**).
+5. **Export analysis** → exam-cell Excel with borders, AB (yellow), fails (red).
 
 ---
 
-## Sample file for testing
+## Sample files for testing
 
 | File | Contents |
 |------|----------|
-| `sample-mark-sheet-IA2.xlsx` | 30 students, 6 subjects (CS3452, CS3491, CS3492, IT3401, CS3451, GE3451), FRONT + MARK + NameList sheets |
+| `RA II AIML.xlsx` / `RA III AIML.xlsx` | Your section mark sheets with date + short-code headers (DM, OS, NLP, …) |
 
-Download from the repo (`public/samples/`) or use the built-in **Load demo data** button. Use the **NameList** sheet with **Merge name list** after upload to test name merging.
+Use the built-in **Load demo data** button or upload the files you already have.
 
 ---
 
@@ -51,8 +50,7 @@ Download from the repo (`public/samples/`) or use the built-in **Load demo data*
 | 1 | **Upload mark sheet** (`.xlsx`) |
 | 2 | Portal reads students, subjects, marks, absents |
 | 3 | Overview **diagrams** + pass / fail / arrear stats |
-| 4 | Optional **Merge name list** (official names by Reg.No) |
-| 5 | **Export analysis** → exam-cell Excel with borders |
+| 4 | **Export analysis** → exam-cell Excel with borders |
 
 ---
 
@@ -62,8 +60,14 @@ Download from the repo (`public/samples/`) or use the built-in **Load demo data*
 
 - **Full RA sheet** — `FRONT` + `MARK` with B/G, C/M, H/DS, category tables  
 - **Simple IAT / AIML mark sheet** — `S.No | Reg.No | Name | CS3452(TOC) | …`  
-- Subject headers: `CS3452 & Theory of Computation` **or** `CS3452(TOC)`  
-- Marks: numbers, `AB`, `OD` (on duty → treated as absent), `NA`
+- **Date + short-code header** (common AIML format)  
+  ```
+  S.No | Register No. | Name | 30/07/26 | 31/07/26 | …
+                 | DM       | OS       | …
+  ```
+  Codes like `DM`, `OS`, `OOSE`, `DS`, `JP`, `NLP`, `DL`, `DC`, `CCS`, `CC`, `STA` are recognised and expanded to full names.
+- Subject headers: `CS3452 & Theory of Computation` **or** `CS3452(TOC)` **or** short codes under dates  
+- Marks: numbers, `AB` / `Ab`, `OD` (on duty → treated as absent), `NA`
 
 ### Analysis
 
@@ -78,13 +82,12 @@ Download from the repo (`public/samples/`) or use the built-in **Load demo data*
 - Subject-wise pass / fail bar chart
 - Arrear distribution pie chart
 - Pass vs fail overview chart
-- Subject summary with progress bars
 
 ### Sidebar
 
 - Editable assessment meta (title, department, year, semester, batch, section)
-- Full subject names + staff + pass %
-- Ranked student names with P/F
+- Full subject names
+- Configurable pass mark
 
 ### Export Excel
 
@@ -101,9 +104,8 @@ Download from the repo (`public/samples/`) or use the built-in **Load demo data*
 2. **Upload mark sheet** or **Load demo data**
 3. Check the notice: student count and subject codes
 4. Review **Overview** diagrams and **Subjects** table
-5. (Optional) **Merge name list** for official spellings
-6. Adjust pass mark in the sidebar if needed
-7. **Export analysis** → submit the downloaded file
+5. Adjust pass mark in the sidebar if needed
+6. **Export analysis** → submit the downloaded file
 
 ---
 
@@ -128,9 +130,9 @@ Stack: **TanStack Start** · React 19 · Tailwind 4 · ExcelJS · SheetJS · Rec
 
 | Column | Example |
 |--------|---------|
-| Reg.No | `310824148001` |
+| Reg.No | `310824148001` or `25JELAIML402` |
 | Name | `STUDENT NAME` |
-| Subject codes | `CS3452(TOC)` or `CS3452 & Theory of Computation` |
+| Subject codes | `CS3452(TOC)` **or** short codes (`DM`, `NLP`…) under date headers |
 
 **Optional (for category tables)**
 

@@ -23,7 +23,6 @@ function cellStr(v: unknown): string {
 function parseMark(v: unknown): Mark {
   if (v === undefined || v === null || v === "") return null;
   if (typeof v === "number") {
-    // Keep one decimal if present (e.g. 68.333 → 68)
     return Math.round(v);
   }
   const s = String(v).trim();
@@ -306,7 +305,6 @@ function collectSubjectsFromDateAndCodeRows(
     const dateText = cellStr(dateRow[col]);
     const codeText = cellStr(codeRow[col]);
 
-    // Prefer short code from the second row
     let code = "";
     let nameHint = "";
 
@@ -314,11 +312,9 @@ function collectSubjectsFromDateAndCodeRows(
       code = codeText.toUpperCase();
       nameHint = code;
     } else if (dateText && isShortSubjectCode(dateText)) {
-      // Fallback: short code sitting on the first header row
       code = dateText.toUpperCase();
       nameHint = code;
     } else if (dateText && isDateLikeHeader(dateText) && codeText) {
-      // Date above + something below – treat below as code if plausible
       if (/^[A-Z0-9]{2,8}$/i.test(codeText)) {
         code = codeText.toUpperCase();
         nameHint = code;
@@ -344,7 +340,7 @@ function collectSubjectsFromDateAndCodeRows(
 }
 
 function isStudentReg(reg: string): boolean {
-  // Pure numeric (12+ digits) or alphanumeric like 25JELAIML402
+  // Pure numeric (6+ digits) or alphanumeric like 25JELAIML402
   if (/^\d{6,}$/.test(reg)) return true;
   if (/^[0-9A-Z]{8,}$/i.test(reg) && /\d/.test(reg)) return true;
   return false;
@@ -432,7 +428,7 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
   let colGender = -1;
   let colQuota = -1;
   let colStay = -1;
-  let dataStartOffset = 1; // how many rows after headerIdx to start reading students
+  let dataStartOffset = 1; // rows after headerIdx before first student
 
   for (const idx of candidateIdxs) {
     const header = markGrid[idx] as unknown[];
@@ -447,7 +443,10 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
       const h = cellStr(cell).toUpperCase().replace(/\s+/g, "");
       if (/REG/.test(h) && /NO/.test(h)) cReg = col;
       if (
-        (h === "NAME" || h === "STUDENT'SNAME" || h === "STUDENTSNAME" || h === "NAMEOFTHESTUDENT") &&
+        (h === "NAME" ||
+          h === "STUDENT'SNAME" ||
+          h === "STUDENTSNAME" ||
+          h === "NAMEOFTHESTUDENT") &&
         !CODE_RE.test(h)
       ) {
         cName = col;
@@ -479,12 +478,8 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
     );
 
     // 1) Standard single-row subject headers (CS3452, CS3452(TOC), …)
-    let found = collectSubjectsFromRow(
-      header,
-      skip,
-      codeInfo,
-      legendStart,
-    );
+    let found = collectSubjectsFromRow(header, skip, codeInfo, legendStart);
+    let offset = 1;
 
     // 2) Two-row format: dates on this row, short codes on the next
     if (found.length === 0 && idx + 1 < markGrid.length) {
@@ -497,8 +492,7 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
       );
       if (fromDateCode.length > 0) {
         found = fromDateCode;
-        // Students start after the code row
-        dataStartOffset = 2;
+        offset = 2; // skip the code row
       }
     }
 
@@ -533,6 +527,7 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
       colGender = cGender;
       colQuota = cQuota;
       colStay = cStay;
+      dataStartOffset = offset;
     }
   }
 
