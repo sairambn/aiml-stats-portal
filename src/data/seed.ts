@@ -4,8 +4,8 @@ export const meta = {
   institution: "Jeppiaar Nagar, Rajiv Gandhi Salai, Chennai - 119",
   department: "DEPARTMENT OF ARTIFICIAL INTELLIGENCE AND MACHINE LEARNING",
   title: "INTERNAL ASSESSMENT II RESULT ANALYSIS",
-  year: "II",
-  semester: "IV",
+  year: "III",
+  semester: "VI",
   batch: "2024-2028",
   section: "A",
   passMark: 50,
@@ -13,12 +13,12 @@ export const meta = {
 };
 
 export const seedSubjects: Subject[] = [
-  { code: "CS3452", name: "Theory of Computation", staff: "Mr.T.NAGARAJAN AP/AIML" },
-  { code: "CS3491", name: "Artificial Intelligence and Machine Learning", staff: "Dr.A.VIDHYA AP/AIML" },
-  { code: "CS3492", name: "Database Management Systems", staff: "Mr.STALIN AP/AIML" },
-  { code: "IT3401", name: "Web Essentials", staff: "Ms.BHAGYALAKSHMI AP/AIML" },
-  { code: "CS3451", name: "Introduction to Operating Systems", staff: "Dr.GANESH AP/AIML" },
-  { code: "GE3451", name: "Environmental Sciences and Sustainability", staff: "Dr.RAJESHWARI AP/S&H" },
+  { code: "AL3501", name: "Natural Language Processing", staff: "Mr.B.N.Sairam AP/AIML" },
+  { code: "AL3502", name: "Deep Learning for Vision", staff: "Mrs.P.S.Indhumathi AP/AIML" },
+  { code: "CS3551", name: "Distributed Computing", staff: "Ms.S.Ilakkia AP/AIML" },
+  { code: "CB3492", name: "Cryptography and Cyber Security", staff: "Dr.A.Vidhya HOD/AIML" },
+  { code: "CCS335", name: "Cloud Computing", staff: "Mr.B.N.Sairam AP/AIML" },
+  { code: "CCS366", name: "Software Testing Automation", staff: "Mrs.P.S.Indhumathi AP/AIML" },
 ];
 
 export const seedStudents: Student[] = [
@@ -38,18 +38,4 @@ export const seedStudents: Student[] = [
   { reg: "310824148014", name: "HARINI V", gender: "G", quota: "M", stay: "DS", marks: [93, 89, 95, 91, 90, 88] },
   { reg: "310824148015", name: "ISHAN P", gender: "B", quota: "C", stay: "H", marks: [50, 45, 55, 48, 52, 58] },
   { reg: "310824148016", name: "JANANI M", gender: "G", quota: "C", stay: "DS", marks: [77, 70, 75, 72, 78, 74] },
-  { reg: "310824148017", name: "KARTHIK S", gender: "B", quota: "M", stay: "H", marks: [22, 18, 30, 25, 15, 20] },
-  { reg: "310824148018", name: "KEERTHANA A", gender: "G", quota: "M", stay: "DS", marks: [85, 80, 82, 78, 84, 79] },
-  { reg: "310824148019", name: "LOKESH R", gender: "B", quota: "C", stay: "DS", marks: [60, 58, 65, 62, 70, 55] },
-  { reg: "310824148020", name: "MEENA L", gender: "G", quota: "C", stay: "H", marks: ["AB", "AB", "AB", "AB", "AB", "AB"] },
-  { reg: "310824148021", name: "NITHIN B", gender: "B", quota: "M", stay: "DS", marks: [72, 66, 70, 68, 75, 64] },
-  { reg: "310824148022", name: "POOJA K", gender: "G", quota: "C", stay: "DS", marks: [96, 92, 94, 90, 93, 91] },
-  { reg: "310824148023", name: "PRANAV S", gender: "B", quota: "C", stay: "H", marks: [48, 52, 45, 50, 40, 55] },
-  { reg: "310824148024", name: "PRIYA D", gender: "G", quota: "M", stay: "H", marks: [80, 75, 78, 82, 77, 73] },
-  { reg: "310824148025", name: "RAHUL N", gender: "B", quota: "C", stay: "DS", marks: [35, 42, 38, 30, 28, 45] },
-  { reg: "310824148026", name: "RENUKA M", gender: "G", quota: "C", stay: "DS", marks: [70, 65, 68, 72, 66, 70] },
-  { reg: "310824148027", name: "SACHIN T", gender: "B", quota: "M", stay: "H", marks: [58, 50, 55, 60, 52, 48] },
-  { reg: "310824148028", name: "SANJANA R", gender: "G", quota: "M", stay: "DS", marks: [87, 83, 86, 80, 85, 81] },
-  { reg: "310824148029", name: "SURESH K", gender: "B", quota: "C", stay: "DS", marks: [42, 30, 50, 35, 48, 40] },
-  { reg: "310824148030", name: "SWETHA V", gender: "G", quota: "C", stay: "H", marks: [91, 88, 90, 86, 89, 87] },
 ];
