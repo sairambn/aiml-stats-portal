@@ -293,8 +293,8 @@ function namesMatch(a: string, b: string): boolean {
   const [shorter, longer] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
   const longerSet = new Set(longer);
   const matched = shorter.filter((t) => longerSet.has(t)).length;
-  if (shorter.length === 1) return matched === 1;
-  return matched >= 2 && matched >= Math.ceil(shorter.length * 0.7);
+  if (shorter.length === 1) return matched === 1 && shorter[0].length >= 4;
+  return matched >= 2 && matched >= Math.ceil(shorter.length * 0.6);
 }
 
 function extractHostelNames(grid: unknown[][]): { boys: string[]; girls: string[] } {
@@ -450,8 +450,10 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
     const skip = new Set<number>([colReg, colName]);
     const seen = new Set<string>();
     const found: { col: number; subject: Subject }[] = [];
+    let bestCodeRow = headerIdx;
     for (const rIdx of scanRows) {
       const row = markGrid[rIdx] as unknown[];
+      let rowHadCode = false;
       for (let col = 0; col < row.length; col++) {
         if (skip.has(col)) continue;
         const text = cellStr(row[col]);
@@ -462,6 +464,7 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
           if (seen.has(code)) continue;
           seen.add(code);
           found.push({ col, subject: { code, name: resolveSubjectName(code, code, codeInfo), staff: codeInfo.get(code)?.staff ?? "" } });
+          rowHadCode = true;
           continue;
         }
         if (/^[A-Z]{2,6}$/i.test(text.trim())) {
@@ -469,12 +472,14 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
           if (seen.has(code)) continue;
           seen.add(code);
           found.push({ col, subject: { code, name: resolveSubjectName(code, code, codeInfo), staff: codeInfo.get(code)?.staff ?? "" } });
+          rowHadCode = true;
         }
       }
+      if (rowHadCode) bestCodeRow = rIdx;
     }
     if (found.length > 0) {
       subjectCols = found.sort((a, b) => a.col - b.col);
-      dataStartOffset = 2;
+      dataStartOffset = Math.max(1, bestCodeRow - headerIdx + 1);
     }
   }
   if (!subjectCols.length) throw new Error("No subject columns found. Header must include codes like CS3452, AL3501, CCS335, GE3451 or short codes (NLP, DM, OS).");
