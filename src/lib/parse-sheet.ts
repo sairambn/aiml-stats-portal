@@ -33,7 +33,8 @@ function parseMark(v: unknown): Mark {
   return Math.round(n);
 }
 
-const CODE_RE = /([A-Z]{2,4}\d{3,4})/i;
+// Supports classic (CS3452, AL3501, CCS335) and newer 2025-style (MA25C08, CS25C11, CS25C09)
+const CODE_RE = /([A-Z]{2,4}(?:\d{3,4}|\d{2}[A-Z]?\d{2,3}))/i;
 
 const SHORT_NAMES: Record<string, string> = {
   AL3501: "Natural Language Processing",
@@ -124,7 +125,7 @@ function collectCodeInfo(grid: unknown[][]): Map<string, { name: string; staff: 
     const cells = row as unknown[];
     for (let c = 0; c < cells.length; c++) {
       const raw = cellStr(cells[c]);
-      const pure = raw.match(/^([A-Z]{2,4}\d{3,4})$/i);
+      const pure = raw.match(/^([A-Z]{2,4}(?:\d{3,4}|\d{2}[A-Z]?\d{2,3}))$/i);
       if (pure) {
         const code = pure[1].toUpperCase();
         let name = "";
@@ -145,7 +146,7 @@ function collectCodeInfo(grid: unknown[][]): Map<string, { name: string; staff: 
         map.set(code, { name: name || prev?.name || "", staff: staff || prev?.staff || "" });
         continue;
       }
-      const combined = raw.match(/^([A-Z]{2,4}\d{3,4})\s*[&\-–:]\s*(.+)$/i);
+      const combined = raw.match(/^([A-Z]{2,4}(?:\d{3,4}|\d{2}[A-Z]?\d{2,3}))\s*[&\-–:]\s*(.+)$/i);
       if (combined) {
         const code = combined[1].toUpperCase();
         const name = combined[2].trim();
@@ -188,9 +189,10 @@ function isShortSubjectCode(text: string): boolean {
 
 function extractSubjectFromHeader(text: string): { code: string; name: string } | null {
   if (!text || isIdentityHeader(text)) return null;
-  const pure = text.match(/^\s*([A-Z]{2,4}\d{3,4})\s*$/i);
+  // Pure code: classic CS3452 or newer MA25C08 / CS25C11
+  const pure = text.match(/^\s*([A-Z]{2,4}(?:\d{3,4}|\d{2}[A-Z]?\d{2,3}))\s*$/i);
   if (pure) return { code: pure[1].toUpperCase(), name: pure[1].toUpperCase() };
-  const m = text.match(/^\s*([A-Z]{2,4}\d{3,4})\s*(?:\(([^)]*)\)|[&\-–:]*\s*(.*))?\s*$/i);
+  const m = text.match(/^\s*([A-Z]{2,4}(?:\d{3,4}|\d{2}[A-Z]?\d{2,3}))\s*(?:\(([^)]*)\)|[&\-–:]*\s*(.*))?\s*$/i);
   if (m) {
     const code = m[1].toUpperCase();
     let name = (m[2] || m[3] || "").trim().replace(/^[&\-–:]+\s*/, "");
@@ -198,7 +200,7 @@ function extractSubjectFromHeader(text: string): { code: string; name: string } 
     if (/^(total|pass\s*%?|arrear.*|absent|status|percentage)$/i.test(name)) return null;
     return { code, name: name || code };
   }
-  const anywhere = text.match(/\b([A-Z]{2,4}\d{3,4})\b/i);
+  const anywhere = text.match(/\b([A-Z]{2,4}(?:\d{3,4}|\d{2}[A-Z]?\d{2,3}))\b/i);
   if (anywhere) {
     const code = anywhere[1].toUpperCase();
     const name = text.replace(anywhere[0], "").replace(/^[(&\-–:\s]+|[)\s]+$/g, "").trim();
@@ -248,7 +250,7 @@ function collectSubjectsFromRow(header: unknown[], skipCols: Set<number>, codeIn
       if (short) extracted = { code: short, name: short };
     }
     if (!extracted) {
-      const pureCode = text.match(/^([A-Z]{2,4}\d{3,4})$/i);
+      const pureCode = text.match(/^([A-Z]{2,4}(?:\d{3,4}|\d{2}[A-Z]?\d{2,3}))$/i);
       if (pureCode) extracted = { code: pureCode[1].toUpperCase(), name: pureCode[1].toUpperCase() };
     }
     if (!extracted || seenCodes.has(extracted.code)) continue;
@@ -269,7 +271,7 @@ function collectSubjectsFromDateAndCodeRows(dateRow: unknown[], codeRow: unknown
     let code = "";
     let nameHint = "";
     const codeFromText = (t: string) => {
-      const m = t.match(/\b([A-Z]{2,4}\d{3,4})\b/i);
+      const m = t.match(/\b([A-Z]{2,4}(?:\d{3,4}|\d{2}[A-Z]?\d{2,3}))\b/i);
       return m ? m[1].toUpperCase() : null;
     };
     if (codeText && codeFromText(codeText)) { code = codeFromText(codeText)!; nameHint = code; }
@@ -468,7 +470,7 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
         const code = t.toUpperCase();
         if (seen.has(code)) continue;
         seen.add(code);
-        shortOnly.push({ col, subject: { code, name: resolveSubjectName(code, code, codeInfo), staff: resolveSubjectStaff(code, codeInfo) } });
+        shortOnly.push({ col, subject: { code: code, name: resolveSubjectName(code, code, codeInfo), staff: resolveSubjectStaff(code, codeInfo) } });
       }
       if (shortOnly.length > 0) found = shortOnly;
     }
@@ -492,7 +494,7 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
         if (skip.has(col)) continue;
         const text = cellStr(row[col]);
         if (!text) continue;
-        const m = text.match(/\b([A-Z]{2,4}\d{3,4})\b/i);
+        const m = text.match(/\b([A-Z]{2,4}(?:\d{3,4}|\d{2}[A-Z]?\d{2,3}))\b/i);
         if (m) {
           const code = m[1].toUpperCase();
           if (seen.has(code)) continue;
@@ -516,7 +518,7 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
       dataStartOffset = Math.max(1, bestCodeRow - headerIdx + 1);
     }
   }
-  if (!subjectCols.length) throw new Error("No subject columns found. Header must include codes like CS3452, AL3501, CCS335, GE3451 or short codes (NLP, DM, OS).");
+  if (!subjectCols.length) throw new Error("No subject columns found. Header must include codes like CS3452, AL3501, CS25C09, MA25C08 or short codes (NLP, DM, OS).");
   const parsed: Student[] = [];
   const seen = new Set<string>();
   for (const row of markGrid.slice(headerIdx + dataStartOffset)) {
