@@ -96,7 +96,11 @@ function parseMetaFromGrid(grid: unknown[][]): Partial<ExportMeta> {
       meta.institution = first;
     }
     if (!meta.department && /department/i.test(first || joined)) {
-      meta.department = first || joined.match(/department[^,]*/i)?.[0] || joined;
+      let dep = first || joined.match(/department[^,]*/i)?.[0] || joined;
+      if (/information\s*technology/i.test(dep) && !/artificial\s*intelligence/i.test(dep)) {
+        dep = "DEPARTMENT OF ARTIFICIAL INTELLIGENCE AND MACHINE LEARNING";
+      }
+      meta.department = dep;
     }
     if (!meta.title && first && /assessment|result\s*analysis|internal|mark\s*sheet|iat/i.test(first) && !/department/i.test(first)) {
       meta.title = first;
@@ -296,23 +300,44 @@ function normalizeName(name: string): string {
 }
 
 function nameTokens(name: string): string[] {
-  return normalizeName(name).split(" ").filter((t) => t.length >= 2);
+  const parts = normalizeName(name).split(" ").filter(Boolean);
+  const tokens: string[] = [];
+  for (const p of parts) {
+    if (/^[A-Z]{2,3}$/.test(p)) {
+      for (const ch of p) tokens.push(ch);
+    } else {
+      tokens.push(p);
+    }
+  }
+  return tokens.filter((t) => t.length >= 1);
 }
 
-function namesMatch(a: string, b: string): boolean {
-  const na = normalizeName(a);
-  const nb = normalizeName(b);
-  if (!na || !nb) return false;
-  if (na === nb) return true;
-  if (na.includes(nb) || nb.includes(na)) return true;
-  const ta = nameTokens(a);
-  const tb = nameTokens(b);
-  if (ta.length === 0 || tb.length === 0) return false;
-  const [shorter, longer] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
-  const longerSet = new Set(longer);
-  const matched = shorter.filter((t) => longerSet.has(t)).length;
-  if (shorter.length === 1) return matched === 1 && shorter[0].length >= 4;
-  return matched >= 2 && matched >= Math.ceil(shorter.length * 0.6);
+function nameMatchScore(studentName: string, listName: string): number {
+  const ns = normalizeName(studentName);
+  const nl = normalizeName(listName);
+  if (!ns || !nl) return 0;
+  if (ns === nl) return 100;
+  if (ns.includes(nl) || nl.includes(ns)) return 90;
+  const ts = nameTokens(studentName);
+  const tl = nameTokens(listName);
+  if (!ts.length || !tl.length) return 0;
+  const studentSet = new Set(ts);
+  const matched = tl.filter((t) => studentSet.has(t)).length;
+  if (matched === 0) return 0;
+  const significant = tl.filter((t) => t.length >= 3);
+  if (significant.length <= 1 && tl.length === 1) {
+    return tl[0].length >= 4 && studentSet.has(tl[0]) ? 70 : 0;
+  }
+  const sig = significant.length > 0 ? significant : tl;
+  const matchedSig = sig.filter((t) => studentSet.has(t)).length;
+  const ratio = matchedSig / sig.length;
+  if (ratio < 0.5) return 0;
+  let score = Math.round(ratio * 80);
+  for (const t of tl) {
+    if (t.length === 1 && studentSet.has(t)) score += 10;
+    if (t.length === 1 && !studentSet.has(t)) score -= 25;
+  }
+  return Math.max(0, Math.min(100, score));
 }
 
 function extractHostelNames(grid: unknown[][]): { boys: string[]; girls: string[] } {
@@ -341,10 +366,19 @@ function extractHostelNames(grid: unknown[][]): { boys: string[]; girls: string[
 
 function applyHostelInfo(students: Student[], grid: unknown[][]): void {
   const { boys, girls } = extractHostelNames(grid);
-  if (boys.length === 0 && girls.length === 0) return;
-  for (const s of students) {
-    if (boys.some((b) => namesMatch(s.name, b)) || girls.some((g) => namesMatch(s.name, g))) {
-      s.stay = "H";
+  const allHostel = [...boys, ...girls];
+  if (allHostel.length === 0) return;
+  const used = new Set<string>();
+  for (const listName of allHostel) {
+    let best: { reg: string; score: number } | null = null;
+    for (const s of students) {
+      if (used.has(s.reg)) continue;
+      const score = nameMatchScore(s.name, listName);
+      if (score > 0 && (!best || score > best.score)) best = { reg: s.reg, score };
+    }
+    if (best && best.score >= 50) {
+      const student = students.find((s) => s.reg === best!.reg);
+      if (student) { student.stay = "H"; used.add(student.reg); }
     }
   }
 }
@@ -500,5 +534,8 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
   }
   if (!parsed.length) throw new Error("No student rows found in the mark sheet");
   applyHostelInfo(parsed, markGrid);
+  if (!meta.department || /information\s*technology/i.test(meta.department || "")) {
+    meta.department = "DEPARTMENT OF ARTIFICIAL INTELLIGENCE AND MACHINE LEARNING";
+  }
   return { students: parsed, subjects: subjectCols.map((s) => s.subject), meta };
 }
