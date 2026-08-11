@@ -267,6 +267,82 @@ function isStudentReg(reg: string): boolean {
   return false;
 }
 
+function normalizeName(name: string): string {
+  return name
+    .toUpperCase()
+    .replace(/[^A-Z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function nameTokens(name: string): string[] {
+  return normalizeName(name)
+    .split(" ")
+    .filter((t) => t.length >= 2);
+}
+
+function namesMatch(a: string, b: string): boolean {
+  const na = normalizeName(a);
+  const nb = normalizeName(b);
+  if (!na || !nb) return false;
+  if (na === nb) return true;
+  if (na.includes(nb) || nb.includes(na)) return true;
+  const ta = nameTokens(a);
+  const tb = nameTokens(b);
+  if (ta.length === 0 || tb.length === 0) return false;
+  const [shorter, longer] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  const longerSet = new Set(longer);
+  const matched = shorter.filter((t) => longerSet.has(t)).length;
+  if (shorter.length === 1) return matched === 1;
+  return matched >= 2 && matched >= Math.ceil(shorter.length * 0.7);
+}
+
+function extractHostelNames(grid: unknown[][]): { boys: string[]; girls: string[] } {
+  const boys: string[] = [];
+  const girls: string[] = [];
+  let mode: "boys" | "girls" | null = null;
+  for (const row of grid) {
+    const cells = (row as unknown[]).map(cellStr);
+    const joined = cells.join(" ").toLowerCase();
+    if (/boys\s*hostel/i.test(joined) || /hostel\s*boys/i.test(joined)) {
+      mode = "boys";
+      continue;
+    }
+    if (/girls\s*hostel/i.test(joined) || /hostel\s*girls/i.test(joined)) {
+      mode = "girls";
+      continue;
+    }
+    if (!mode) continue;
+    if (/day\s*scholar|total\s*no|department|jeppiaar|pass\s*%|no\.?\s*of\s*students/i.test(joined)) {
+      mode = null;
+      continue;
+    }
+    for (const cell of cells) {
+      if (!cell) continue;
+      const m = cell.match(/^\s*\d+\.?\s*(.+)$/);
+      const name = (m ? m[1] : cell).trim();
+      if (!name || name.length < 2) continue;
+      if (/hostel|boys|girls|day\s*scholar/i.test(name)) continue;
+      if (mode === "boys") boys.push(name);
+      else girls.push(name);
+    }
+  }
+  return { boys, girls };
+}
+
+function applyHostelInfo(students: Student[], grid: unknown[][]): void {
+  const { boys, girls } = extractHostelNames(grid);
+  if (boys.length === 0 && girls.length === 0) return;
+  for (const s of students) {
+    const isHostel =
+      boys.some((b) => namesMatch(s.name, b)) ||
+      girls.some((g) => namesMatch(s.name, g));
+    if (isHostel) {
+      s.stay = "H";
+    }
+  }
+}
+
 export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
   const wb = XLSX.read(data, { type: "array", cellDates: true, dense: false });
   const markName = wb.SheetNames.find((n) => /^mark$/i.test(n)) ?? wb.SheetNames.find((n) => /mark/i.test(n)) ?? wb.SheetNames[wb.SheetNames.length - 1];
@@ -369,8 +445,6 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
       dataStartOffset = offset;
     }
   }
-
-  // Ultimate fallback: scan the header row and the next 2 rows for any subject-code-like values
   if (!subjectCols.length) {
     const scanRows = [headerIdx, headerIdx + 1, headerIdx + 2].filter(i => i < markGrid.length);
     const skip = new Set<number>([colReg, colName]);
@@ -420,5 +494,6 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
     parsed.push({ reg, name: cellStr(cells[colName]), gender: genderRaw.startsWith("G") ? "G" : "B", quota: quotaRaw.startsWith("M") ? "M" : "C", stay: stayRaw.startsWith("H") ? "H" : "DS", marks: subjectCols.map(({ col }) => parseMark(cells[col])) });
   }
   if (!parsed.length) throw new Error("No student rows found in the mark sheet");
+  applyHostelInfo(parsed, markGrid);
   return { students: parsed, subjects: subjectCols.map((s) => s.subject), meta };
 }
