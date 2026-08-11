@@ -20,7 +20,6 @@ function cellStr(v: unknown): string {
 }
 
 function parseMark(v: unknown): Mark {
-  // Empty / blank cells are treated as absent (exam-cell convention)
   if (v === undefined || v === null || v === "") return "AB";
   if (typeof v === "number") {
     if (Number.isNaN(v)) return "AB";
@@ -28,7 +27,6 @@ function parseMark(v: unknown): Mark {
   }
   const s = String(v).trim();
   if (!s) return "AB";
-  // AB = absent, OD = on duty, NA = not applicable
   if (/^(ab|od|na|n\/?a|-)$/i.test(s)) return "AB";
   const n = Number(s);
   if (!Number.isFinite(n)) return "AB";
@@ -151,7 +149,6 @@ function isDateLikeHeader(text: string): boolean {
   return (/^\d{1,2}[\/.\-]\d{1,2}[\/.\-]\d{2,4}$/.test(t) || /^\d{4}-\d{2}-\d{2}/.test(t));
 }
 
-/** Extract short subject code from a cell that may contain "29.07.26 NLP" or "NLP\n29.07.26" */
 function extractShortCodeFromMixed(text: string): string | null {
   const parts = text.trim().split(/[\s\n\/]+/).filter(Boolean);
   for (const p of parts) {
@@ -166,6 +163,8 @@ function isShortSubjectCode(text: string): boolean {
 
 function extractSubjectFromHeader(text: string): { code: string; name: string } | null {
   if (!text || isIdentityHeader(text)) return null;
+  const pure = text.match(/^\s*([A-Z]{2,4}\d{3,4})\s*$/i);
+  if (pure) return { code: pure[1].toUpperCase(), name: pure[1].toUpperCase() };
   const m = text.match(/^\s*([A-Z]{2,4}\d{3,4})\s*(?:\(([^)]*)\)|[&\-–:]*\s*(.*))?\s*$/i);
   if (m) {
     const code = m[1].toUpperCase();
@@ -175,11 +174,13 @@ function extractSubjectFromHeader(text: string): { code: string; name: string } 
     return { code, name: name || code };
   }
   const anywhere = text.match(/\b([A-Z]{2,4}\d{3,4})\b/i);
-  if (!anywhere) return null;
-  const code = anywhere[1].toUpperCase();
-  const name = text.replace(anywhere[0], "").replace(/^[(&\-–:\s]+|[)\s]+$/g, "").trim();
-  if (/^(total|pass|arrear|absent|status|percentage)$/i.test(name)) return null;
-  return { code, name: name || code };
+  if (anywhere) {
+    const code = anywhere[1].toUpperCase();
+    const name = text.replace(anywhere[0], "").replace(/^[(&\-–:\s]+|[)\s]+$/g, "").trim();
+    if (/^(total|pass|arrear|absent|status|percentage)$/i.test(name)) return { code, name: code };
+    return { code, name: name || code };
+  }
+  return null;
 }
 
 function resolveSubjectName(code: string, extractedName: string, info: Map<string, { name: string; staff: string }>): string {
@@ -210,12 +211,15 @@ function collectSubjectsFromRow(header: unknown[], skipCols: Set<number>, codeIn
     if (skipCols.has(col)) continue;
     if (preferBeforeCol != null && col >= preferBeforeCol) continue;
     const text = cellStr(header[col]);
-    if (!text || isIdentityHeader(text)) continue;
+    if (!text) continue;
     let extracted = extractSubjectFromHeader(text);
-    // Fallback: cell may be "29.07.26 NLP" style mixed date + short code
-    if (!extracted) {
+    if (!extracted && !isIdentityHeader(text)) {
       const short = extractShortCodeFromMixed(text);
       if (short) extracted = { code: short, name: short };
+    }
+    if (!extracted) {
+      const pureCode = text.match(/^([A-Z]{2,4}\d{3,4})$/i);
+      if (pureCode) extracted = { code: pureCode[1].toUpperCase(), name: pureCode[1].toUpperCase() };
     }
     if (!extracted || seenCodes.has(extracted.code)) continue;
     seenCodes.add(extracted.code);
@@ -235,12 +239,17 @@ function collectSubjectsFromDateAndCodeRows(dateRow: unknown[], codeRow: unknown
     const codeText = cellStr(codeRow[col]);
     let code = "";
     let nameHint = "";
-    if (codeText && isShortSubjectCode(codeText)) { code = codeText.toUpperCase(); nameHint = code; }
+    const codeFromText = (t: string) => {
+      const m = t.match(/\b([A-Z]{2,4}\d{3,4})\b/i);
+      return m ? m[1].toUpperCase() : null;
+    };
+    if (codeText && codeFromText(codeText)) { code = codeFromText(codeText)!; nameHint = code; }
+    else if (dateText && codeFromText(dateText)) { code = codeFromText(dateText)!; nameHint = code; }
+    else if (codeText && isShortSubjectCode(codeText)) { code = codeText.toUpperCase(); nameHint = code; }
     else if (dateText && isShortSubjectCode(dateText)) { code = dateText.toUpperCase(); nameHint = code; }
     else if (dateText && isDateLikeHeader(dateText) && codeText && /^[A-Z0-9]{2,8}$/i.test(codeText)) { code = codeText.toUpperCase(); nameHint = code; }
-    // Also handle a single cell that contains both date + short code (e.g. "29.07.26\nNLP")
     if (!code) {
-      const mixed = extractShortCodeFromMixed(dateText) || extractShortCodeFromMixed(codeText);
+      const mixed = codeFromText(dateText) || codeFromText(codeText) || extractShortCodeFromMixed(dateText) || extractShortCodeFromMixed(codeText);
       if (mixed) { code = mixed; nameHint = mixed; }
     }
     if (!code || seenCodes.has(code)) continue;
@@ -253,7 +262,6 @@ function collectSubjectsFromDateAndCodeRows(dateRow: unknown[], codeRow: unknown
 
 function isStudentReg(reg: string): boolean {
   if (!reg || reg.length < 5) return false;
-  // pure numeric (most common) or alphanumeric college codes like 25JELAIML402
   if (/^\d{6,}$/.test(reg)) return true;
   if (/^[0-9A-Z]{6,}$/i.test(reg) && /\d/.test(reg)) return true;
   return false;
@@ -292,7 +300,6 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
     if (row.some((c) => {
       const raw = String(c ?? "");
       const s = raw.toLowerCase().replace(/[.\s_\-]/g, "");
-      // Match: Reg.No, REG. NO., Register No., Register Number, REGNO, Registration No, etc.
       return (
         /reg.*n[ou]/.test(s) ||
         s.includes("regno") ||
@@ -362,7 +369,7 @@ export function parseWorkbook(data: ArrayBuffer): ParsedSheet {
       dataStartOffset = offset;
     }
   }
-  if (!subjectCols.length) throw new Error("No subject columns found. Expected codes like CS3452 / DM / OS / NLP, or date + short-code rows.");
+  if (!subjectCols.length) throw new Error("No subject columns found. Header must include codes like CS3452, AL3501, GE3451, or short codes (NLP, DM, OS).");
   const parsed: Student[] = [];
   const seen = new Set<string>();
   for (const row of markGrid.slice(headerIdx + dataStartOffset)) {
